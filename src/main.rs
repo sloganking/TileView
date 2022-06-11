@@ -1,5 +1,5 @@
-use std::{collections::HashMap, path::PathBuf};
 use glob::{glob, GlobError};
+use std::{collections::HashMap, path::PathBuf};
 
 use macroquad::prelude::*;
 
@@ -103,6 +103,8 @@ async fn main() {
         sector_to_texture_z0.insert((x, z), texture);
     }
 
+    let mut zoom_multiplier: f32 = 1.0;
+
     loop {
         clear_background(GRAY);
 
@@ -112,7 +114,7 @@ async fn main() {
 
         draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
-        let speed = if is_key_down(KeyCode::LeftShift){
+        let speed = if is_key_down(KeyCode::LeftShift) {
             3.
         } else {
             1.
@@ -131,38 +133,42 @@ async fn main() {
             y_offset -= speed;
         }
 
+        if is_key_down(KeyCode::E) {
+            zoom_multiplier -= 0.01;
+        }
+        if is_key_down(KeyCode::Q) {
+            zoom_multiplier += 0.01;
+        }
+
+        zoom_multiplier = zoom_multiplier.clamp(0.1, 3.);
+
         //> draw all textures
             for (sector, texture) in &sector_to_texture_z0 {
-                draw_texture(
+                let params = DrawTextureParams {
+                    dest_size: Some(vec2(
+                        IMAGE_TILE_WIDTH as f32 * zoom_multiplier,
+                        IMAGE_TILE_HEIGHT as f32 * zoom_multiplier,
+                    )),
+                    source: None,
+                    rotation: 0.,
+                    flip_x: false,
+                    flip_y: false,
+                    pivot: None,
+                };
+
+                draw_texture_ex(
                     *texture,
-                    screen_width() / 2. + x_offset + sector.0 as f32 * IMAGE_TILE_WIDTH as f32,
-                    screen_height() / 2. + y_offset + sector.1 as f32 * IMAGE_TILE_HEIGHT as f32,
+                    screen_width() / 2.
+                        + (x_offset * zoom_multiplier)
+                        + sector.0 as f32 * IMAGE_TILE_WIDTH as f32 * zoom_multiplier,
+                    screen_height() / 2.
+                        + (y_offset * zoom_multiplier)
+                        + sector.1 as f32 * IMAGE_TILE_HEIGHT as f32 * zoom_multiplier,
                     WHITE,
+                    params,
                 );
             }
         //<
-
-        // draw_texture(
-        //     texture,
-        //     screen_width() / 2. + x_offset,
-        //     screen_height() / 2. + y_offset,
-        //     WHITE,
-        // );
-
-        // draw_texture(
-        //     texture2,
-        //     screen_width() / 2. + x_offset - 512.,
-        //     screen_height() / 2. + y_offset,
-        //     WHITE,
-        // );
-
-        // draw_texture_ex(
-        //     texture,
-        //     screen_width() / 2. + x_offset,
-        //     screen_height() / 2. + y_offset,
-        //     WHITE,
-
-        // );
 
         next_frame().await
     }
