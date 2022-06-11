@@ -115,9 +115,9 @@ async fn main() {
         draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
         let speed = if is_key_down(KeyCode::LeftShift) {
-            3.
+            3. / zoom_multiplier
         } else {
-            1.
+            1. / zoom_multiplier
         };
 
         if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
@@ -134,10 +134,10 @@ async fn main() {
         }
 
         if is_key_down(KeyCode::E) {
-            zoom_multiplier -= 0.01;
+            zoom_multiplier -= zoom_multiplier / 100.;
         }
         if is_key_down(KeyCode::Q) {
-            zoom_multiplier += 0.01;
+            zoom_multiplier += zoom_multiplier / 100.;
         }
 
         zoom_multiplier = zoom_multiplier.clamp(0.1, 3.);
