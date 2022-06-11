@@ -49,58 +49,36 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
+async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2D> {
+    let files = get_files_in_dir(&("./terrain/".to_owned() + &level.to_string()), "").unwrap();
+
+    let mut sector_to_texture = HashMap::new();
+
+    for file in files {
+        let file_name = file.file_stem().unwrap().to_str().unwrap();
+        let split: Vec<&str> = file_name.split(',').collect();
+        let x: i32 = split[0].parse().unwrap();
+        let z: i32 = split[1].parse().unwrap();
+
+        let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
+
+        sector_to_texture.insert((x, z), texture);
+    }
+
+    sector_to_texture
+}
+
 #[macroquad::main("BasicShapes")]
 async fn main() {
-    let texture: Texture2D = load_texture("./input/0,0.png").await.unwrap();
-    let texture2: Texture2D = load_texture("./input/-1,0.png").await.unwrap();
-
     // positive X is right
     let mut x_offset = 0.;
     // positive Y is down
     let mut y_offset = 0.;
 
-    let files = get_files_in_dir("./input/", "").unwrap();
-
-    let mut bounds = Bounds {
-        max_x: i32::MIN,
-        max_z: i32::MIN,
-        min_x: i32::MAX,
-        min_z: i32::MAX,
-    };
-
-    let mut filename_and_numbers_vec: Vec<FilenameAndNumbers> = Vec::new();
-
-    let mut sector_to_texture_z0 = HashMap::new();
-
-    // find max and min dimensions
-    for file in files {
-        let file_name = file.file_stem().unwrap().to_str().unwrap();
-        let split: Vec<&str> = file_name.split(',').collect();
-
-        let x: i32 = split[0].parse().unwrap();
-        let z: i32 = split[1].parse().unwrap();
-
-        filename_and_numbers_vec.push(FilenameAndNumbers {
-            file_name: file.clone(),
-            x,
-            z,
-        });
-
-        if x > bounds.max_x {
-            bounds.max_x = x;
-        }
-        if z > bounds.max_z {
-            bounds.max_z = z;
-        }
-        if x < bounds.min_x {
-            bounds.min_x = x;
-        }
-        if z < bounds.min_z {
-            bounds.min_z = z;
-        }
-
-        let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
-        sector_to_texture_z0.insert((x, z), texture);
+    // load texture cache
+    let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
+    for x in 0..7 {
+        texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap()).await);
     }
 
     let mut zoom_multiplier: f32 = 1.0;
@@ -108,46 +86,73 @@ async fn main() {
     loop {
         clear_background(GRAY);
 
-        draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
-        draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
-        draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
+        // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
+        // draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
+        // draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
 
-        draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
+        // draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
-        let speed = if is_key_down(KeyCode::LeftShift) {
-            3. / zoom_multiplier
-        } else {
-            1. / zoom_multiplier
-        };
+        //> react to key presses
+            let speed = if is_key_down(KeyCode::LeftShift) {
+                20. / zoom_multiplier
+            } else {
+                5. / zoom_multiplier
+            };
 
-        if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-            x_offset -= speed;
-        }
-        if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
-            x_offset += speed;
-        }
-        if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
-            y_offset += speed;
-        }
-        if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
-            y_offset -= speed;
-        }
+            if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
+                x_offset -= speed;
+            }
+            if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
+                x_offset += speed;
+            }
+            if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
+                y_offset += speed;
+            }
+            if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
+                y_offset -= speed;
+            }
 
-        if is_key_down(KeyCode::E) {
-            zoom_multiplier -= zoom_multiplier / 100.;
-        }
-        if is_key_down(KeyCode::Q) {
-            zoom_multiplier += zoom_multiplier / 100.;
-        }
+            if is_key_down(KeyCode::E) {
+                zoom_multiplier += zoom_multiplier / 100.;
+            }
+            if is_key_down(KeyCode::Q) {
+                zoom_multiplier -= zoom_multiplier / 100.;
+            }
 
-        zoom_multiplier = zoom_multiplier.clamp(0.1, 3.);
+            // zoom_multiplier = zoom_multiplier.clamp(0.1, 10000000000000000000.);
 
-        //> draw all textures
-            for (sector, texture) in &sector_to_texture_z0 {
+        //<> get LOD
+
+            let two: f32 = 2.0;
+            let lod = if zoom_multiplier < 1. / two.powf(6.) {
+                6
+            } else if zoom_multiplier < 1. / two.powf(5.) {
+                5
+            } else if zoom_multiplier < 1. / two.powf(4.) {
+                4
+            } else if zoom_multiplier < 1. / two.powf(3.) {
+                3
+            } else if zoom_multiplier < 1. / two.powf(2.) {
+                2
+            } else if zoom_multiplier < 1. / two.powf(1.) {
+                1
+            } else {
+                0
+            };
+
+        //<> draw all textures
+
+            let list_of_sectors_to_render = [(0, 0)];
+
+            for (sector, _) in &texture_cache[lod] {
+                // println!("lod: {}",lod);
+                // println!("sector: {} {}", sector.0, sector.1);
+                let texture = texture_cache[lod].get(&(sector.0, sector.1)).unwrap();
+
                 let params = DrawTextureParams {
                     dest_size: Some(vec2(
-                        IMAGE_TILE_WIDTH as f32 * zoom_multiplier,
-                        IMAGE_TILE_HEIGHT as f32 * zoom_multiplier,
+                        IMAGE_TILE_WIDTH as f32 * zoom_multiplier * two.powf(lod as f32),
+                        IMAGE_TILE_HEIGHT as f32 * zoom_multiplier * two.powf(lod as f32),
                     )),
                     source: None,
                     rotation: 0.,
@@ -160,15 +165,29 @@ async fn main() {
                     *texture,
                     screen_width() / 2.
                         + (x_offset * zoom_multiplier)
-                        + sector.0 as f32 * IMAGE_TILE_WIDTH as f32 * zoom_multiplier,
+                        + sector.0 as f32
+                            * IMAGE_TILE_WIDTH as f32
+                            * zoom_multiplier
+                            * two.powf(lod as f32),
                     screen_height() / 2.
                         + (y_offset * zoom_multiplier)
-                        + sector.1 as f32 * IMAGE_TILE_HEIGHT as f32 * zoom_multiplier,
+                        + sector.1 as f32
+                            * IMAGE_TILE_HEIGHT as f32
+                            * zoom_multiplier
+                            * two.powf(lod as f32),
                     WHITE,
                     params,
                 );
             }
         //<
+
+        draw_text(
+            &("lod level: ".to_owned() + &lod.to_string()),
+            20.0,
+            20.0,
+            30.0,
+            DARKGRAY,
+        );
 
         next_frame().await
     }
