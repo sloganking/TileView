@@ -68,7 +68,7 @@ async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2
     sector_to_texture
 }
 
-#[macroquad::main("BasicShapes")]
+#[macroquad::main("Map Renderer")]
 async fn main() {
     // positive X is right
     let mut x_offset = 0.;
@@ -112,14 +112,20 @@ async fn main() {
                 y_offset -= speed;
             }
 
+            let zoom_speed = if is_key_down(KeyCode::LeftShift) {
+                zoom_multiplier / 100. * 4.
+            } else {
+                zoom_multiplier / 100.
+            };
+
             if is_key_down(KeyCode::E) {
-                zoom_multiplier += zoom_multiplier / 100.;
+                zoom_multiplier += zoom_speed;
             }
             if is_key_down(KeyCode::Q) {
-                zoom_multiplier -= zoom_multiplier / 100.;
+                zoom_multiplier -= zoom_speed;
             }
 
-            // zoom_multiplier = zoom_multiplier.clamp(0.1, 10000000000000000000.);
+            zoom_multiplier = zoom_multiplier.clamp(0.01, 10.);
 
         //<> get LOD
 
@@ -186,7 +192,7 @@ async fn main() {
             20.0,
             20.0,
             30.0,
-            DARKGRAY,
+            WHITE,
         );
 
         next_frame().await
