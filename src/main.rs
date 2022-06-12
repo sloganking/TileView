@@ -68,13 +68,79 @@ async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2
     sector_to_texture
 }
 
-fn coord_to_2d_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
+fn coord_to_screen_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((camera.x_offset + x as f32 * 2.) * camera.zoom_multiplier);
 
     let out_y = screen_height() / 2. + ((camera.y_offset + y as f32 * 2.) * camera.zoom_multiplier);
 
     (out_x, out_y)
 }
+
+// fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+
+//     let out_x = camera.x_offsetx as f32 / 2.;
+
+//     todo!()
+// }
+
+fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+    let x_out = (-camera.x_offset - screen_width() / 4.) / camera.zoom_multiplier
+        + (x as f32 / 2. / camera.zoom_multiplier);
+    let y_out = (-camera.y_offset - screen_height() / 4.) / camera.zoom_multiplier
+        + (y as f32 / 2. / camera.zoom_multiplier);
+
+    // let x_out = (camera.x_offset / camera.zoom_multiplier);
+    // let y_out = (camera.y_offset / camera.zoom_multiplier);
+
+    // camera.zoom_multiplier * IMAGE_TILE_WIDTH
+
+    // tile width matters
+
+    (x_out, y_out)
+}
+
+struct Rectangle {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
+
+fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+    (value >= min) && (value <= max)
+}
+
+fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+    let x_overlap =
+        value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+
+    let y_overlap =
+        value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+
+    x_overlap && y_overlap
+}
+
+// struct rect
+// {
+//     int x;
+//     int y;
+//     int width;
+//     int height;
+// };
+
+// bool valueInRange(int value, int min, int max)
+// { return (value >= min) && (value <= max); }
+
+// bool rectOverlap(rect A, rect B)
+// {
+//     bool xOverlap = valueInRange(A.x, B.x, B.x + B.width) ||
+//                     valueInRange(B.x, A.x, A.x + A.width);
+
+//     bool yOverlap = valueInRange(A.y, B.y, B.y + B.height) ||
+//                     valueInRange(B.y, A.y, A.y + A.height);
+
+//     return xOverlap && yOverlap;
+// }
 
 struct CameraSettings {
     x_offset: f32,
@@ -161,47 +227,64 @@ async fn main() {
 
         //<> draw all textures
 
-            let list_of_sectors_to_render = [(0, 0)];
+            // let list_of_sectors_to_render = [(0, 0)];
 
+            let mut rendered_sectors = 0;
             for (sector, _) in &texture_cache[lod] {
-                // println!("lod: {}",lod);
-                // println!("sector: {} {}", sector.0, sector.1);
-                let texture = texture_cache[lod].get(&(sector.0, sector.1)).unwrap();
+                let sx = screen_width() / 2.
+                    + (camera.x_offset * camera.zoom_multiplier)
+                    + sector.0 as f32
+                        * IMAGE_TILE_WIDTH as f32
+                        * camera.zoom_multiplier
+                        * two.powf(lod as f32);
 
-                let params = DrawTextureParams {
-                    dest_size: Some(vec2(
-                        IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32),
-                        IMAGE_TILE_HEIGHT as f32 * camera.zoom_multiplier * two.powf(lod as f32),
-                    )),
-                    source: None,
-                    rotation: 0.,
-                    flip_x: false,
-                    flip_y: false,
-                    pivot: None,
+                let sy = screen_height() / 2.
+                    + (camera.y_offset * camera.zoom_multiplier)
+                    + sector.1 as f32
+                        * IMAGE_TILE_HEIGHT as f32
+                        * camera.zoom_multiplier
+                        * two.powf(lod as f32);
+
+                let tile_width =
+                    IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                let tile_height =
+                    IMAGE_TILE_HEIGHT as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+
+                let tile_rect = Rectangle {
+                    x: sx,
+                    y: sy,
+                    width: tile_width,
+                    height: tile_height,
                 };
 
-                draw_texture_ex(
-                    *texture,
-                    screen_width() / 2.
-                        + (camera.x_offset * camera.zoom_multiplier)
-                        + sector.0 as f32
-                            * IMAGE_TILE_WIDTH as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32),
-                    screen_height() / 2.
-                        + (camera.y_offset * camera.zoom_multiplier)
-                        + sector.1 as f32
-                            * IMAGE_TILE_HEIGHT as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32),
-                    WHITE,
-                    params,
-                );
+                let screen_rect = Rectangle {
+                    x: 0.0,
+                    y: 0.0,
+                    width: screen_width(),
+                    height: screen_height(),
+                };
+
+                //if texture pos on screen
+                if rectangle_overlap(screen_rect, tile_rect) {
+                    rendered_sectors += 1;
+                    let texture = texture_cache[lod].get(&(sector.0, sector.1)).unwrap();
+
+                    let params = DrawTextureParams {
+                        dest_size: Some(vec2(tile_width, tile_height)),
+                        source: None,
+                        rotation: 0.,
+                        flip_x: false,
+                        flip_y: false,
+                        pivot: None,
+                    };
+
+                    draw_texture_ex(*texture, sx, sy, WHITE, params);
+                }
             }
         //<
 
         draw_text(
-            &("camera.x_offset: ".to_owned() + &camera.x_offset.to_string()),
+            &("LOD: ".to_owned() + &lod.to_string()),
             20.0,
             20.0,
             30.0,
