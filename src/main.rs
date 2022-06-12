@@ -62,6 +62,7 @@ async fn get_textures_for_zoom_level(level: u32, directory: &str, tile_dimension
 
         // map sector to texture
         let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
+        texture.set_filter(FilterMode::Nearest);
         if texture.width() != tile_dimensions.0 || texture.height() != tile_dimensions.1{
             panic!("File: \"{}\" has differing dimensions",file_name)
         }
