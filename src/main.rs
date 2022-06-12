@@ -68,20 +68,33 @@ async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2
     sector_to_texture
 }
 
+fn coord_to_2d_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
+    let out_x = screen_width() / 2. + ((camera.x_offset + x as f32 * 2.) * camera.zoom_multiplier);
+
+    let out_y = screen_height() / 2. + ((camera.y_offset + y as f32 * 2.) * camera.zoom_multiplier);
+
+    (out_x, out_y)
+}
+
+struct CameraSettings {
+    x_offset: f32,
+    y_offset: f32,
+    zoom_multiplier: f32,
+}
+
 #[macroquad::main("Map Renderer")]
 async fn main() {
-    // positive X is right
-    let mut x_offset = 0.;
-    // positive Y is down
-    let mut y_offset = 0.;
+    let mut camera = CameraSettings {
+        x_offset: 0.,
+        y_offset: 0.,
+        zoom_multiplier: 1.0,
+    };
 
     // load texture cache
     let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0..7 {
         texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap()).await);
     }
-
-    let mut zoom_multiplier: f32 = 1.0;
 
     loop {
         clear_background(GRAY);
@@ -94,53 +107,53 @@ async fn main() {
 
         //> react to key presses
             let speed = if is_key_down(KeyCode::LeftShift) {
-                20. / zoom_multiplier
+                20. / camera.zoom_multiplier
             } else {
-                5. / zoom_multiplier
+                5. / camera.zoom_multiplier
             };
 
             if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-                x_offset -= speed;
+                camera.x_offset -= speed;
             }
             if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
-                x_offset += speed;
+                camera.x_offset += speed;
             }
             if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
-                y_offset += speed;
+                camera.y_offset += speed;
             }
             if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
-                y_offset -= speed;
+                camera.y_offset -= speed;
             }
 
             let zoom_speed = if is_key_down(KeyCode::LeftShift) {
-                zoom_multiplier / 100. * 4.
+                camera.zoom_multiplier / 100. * 4.
             } else {
-                zoom_multiplier / 100.
+                camera.zoom_multiplier / 100.
             };
 
             if is_key_down(KeyCode::E) {
-                zoom_multiplier += zoom_speed;
+                camera.zoom_multiplier += zoom_speed;
             }
             if is_key_down(KeyCode::Q) {
-                zoom_multiplier -= zoom_speed;
+                camera.zoom_multiplier -= zoom_speed;
             }
 
-            zoom_multiplier = zoom_multiplier.clamp(0.01, 10.);
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 10.);
 
         //<> get LOD
 
             let two: f32 = 2.0;
-            let lod = if zoom_multiplier < 1. / two.powf(6.) {
+            let lod = if camera.zoom_multiplier < 1. / two.powf(6.) {
                 6
-            } else if zoom_multiplier < 1. / two.powf(5.) {
+            } else if camera.zoom_multiplier < 1. / two.powf(5.) {
                 5
-            } else if zoom_multiplier < 1. / two.powf(4.) {
+            } else if camera.zoom_multiplier < 1. / two.powf(4.) {
                 4
-            } else if zoom_multiplier < 1. / two.powf(3.) {
+            } else if camera.zoom_multiplier < 1. / two.powf(3.) {
                 3
-            } else if zoom_multiplier < 1. / two.powf(2.) {
+            } else if camera.zoom_multiplier < 1. / two.powf(2.) {
                 2
-            } else if zoom_multiplier < 1. / two.powf(1.) {
+            } else if camera.zoom_multiplier < 1. / two.powf(1.) {
                 1
             } else {
                 0
@@ -157,8 +170,8 @@ async fn main() {
 
                 let params = DrawTextureParams {
                     dest_size: Some(vec2(
-                        IMAGE_TILE_WIDTH as f32 * zoom_multiplier * two.powf(lod as f32),
-                        IMAGE_TILE_HEIGHT as f32 * zoom_multiplier * two.powf(lod as f32),
+                        IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32),
+                        IMAGE_TILE_HEIGHT as f32 * camera.zoom_multiplier * two.powf(lod as f32),
                     )),
                     source: None,
                     rotation: 0.,
@@ -170,16 +183,16 @@ async fn main() {
                 draw_texture_ex(
                     *texture,
                     screen_width() / 2.
-                        + (x_offset * zoom_multiplier)
+                        + (camera.x_offset * camera.zoom_multiplier)
                         + sector.0 as f32
                             * IMAGE_TILE_WIDTH as f32
-                            * zoom_multiplier
+                            * camera.zoom_multiplier
                             * two.powf(lod as f32),
                     screen_height() / 2.
-                        + (y_offset * zoom_multiplier)
+                        + (camera.y_offset * camera.zoom_multiplier)
                         + sector.1 as f32
                             * IMAGE_TILE_HEIGHT as f32
-                            * zoom_multiplier
+                            * camera.zoom_multiplier
                             * two.powf(lod as f32),
                     WHITE,
                     params,
@@ -188,12 +201,25 @@ async fn main() {
         //<
 
         draw_text(
-            &("lod level: ".to_owned() + &lod.to_string()),
+            &("camera.x_offset: ".to_owned() + &camera.x_offset.to_string()),
             20.0,
             20.0,
             30.0,
             WHITE,
         );
+
+        // draw circle at 0,0
+        let coords = coord_to_2d_pos(0, 13000, &camera);
+        draw_circle(coords.0, coords.1, 5.0, YELLOW);
+
+        // lod level matters
+        // camera zoom matters
+        // offset matters
+        // tile width matters
+
+        let sector_x = (camera.x_offset * camera.zoom_multiplier);
+
+        let tile_width = IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
 
         next_frame().await
     }
