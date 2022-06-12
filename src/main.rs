@@ -149,6 +149,10 @@ async fn main() {
         }
     }
 
+    let mut mouse_clicked_in_position: Option<(f32, f32)> = None;
+    let mut clicked_in_x_offset: f32 = 0.0;
+    let mut clicked_in_y_offset: f32 = 0.0;
+
     loop {
         clear_background(GRAY);
 
@@ -193,13 +197,35 @@ async fn main() {
 
             // zoom via scroll wheel
             let (_, mouse_scroll) = mouse_wheel();
-            if mouse_scroll == 1.0{
+            if mouse_scroll == 1.0 {
                 camera.zoom_multiplier += zoom_speed * 10.;
-            } else if mouse_scroll == -1.0{
+            } else if mouse_scroll == -1.0 {
                 camera.zoom_multiplier -= zoom_speed * 10.;
             }
 
+            // limit the zoom
             camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 10.);
+
+            // mouse drag screen
+            if is_mouse_button_down(MouseButton::Left) {
+                if mouse_clicked_in_position == None {
+                    mouse_clicked_in_position = Some(mouse_position());
+                    clicked_in_x_offset = camera.x_offset;
+                    clicked_in_y_offset = camera.y_offset;
+                } else {
+                    let cur_mouse_pos = mouse_position();
+
+                    // calc new x_offset
+                    let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
+                    camera.x_offset = clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier;
+
+                    // calc new y_offset
+                    let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
+                    camera.y_offset = clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier;
+                }
+            } else {
+                mouse_clicked_in_position = None;
+            }
 
         //<> get LOD
 
