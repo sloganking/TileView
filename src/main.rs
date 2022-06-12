@@ -3,9 +3,6 @@ use std::{collections::HashMap, path::PathBuf};
 
 use macroquad::prelude::*;
 
-const IMAGE_TILE_WIDTH: i32 = 512;
-const IMAGE_TILE_HEIGHT: i32 = 512;
-
 #[derive(Debug)]
 struct Bounds {
     max_x: i32,
@@ -51,8 +48,8 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 
 const tile_dir: &str = "./terrain/";
 
-async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2D> {
-    let files = get_files_in_dir(&(tile_dir.to_owned() + &level.to_string()), "").unwrap();
+async fn get_textures_for_zoom_level(level: u32, directory: &str, tile_dimensions: (f32,f32)) -> HashMap<(i32, i32), Texture2D> {
+    let files = get_files_in_dir(&(directory.to_owned() + &level.to_string()), "").unwrap();
 
     let mut sector_to_texture = HashMap::new();
 
@@ -65,6 +62,9 @@ async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2
 
         // map sector to texture
         let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
+        if texture.width() != tile_dimensions.0 || texture.height() != tile_dimensions.1{
+            panic!("File: \"{}\" has differing dimensions",file_name)
+        }
         sector_to_texture.insert((x, z), texture);
     }
 
@@ -72,9 +72,9 @@ async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2
 }
 
 fn coord_to_screen_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
-    let out_x = screen_width() / 2. + ((camera.x_offset + x as f32 * 2.) * camera.zoom_multiplier);
+    let out_x = screen_width() / 2. + ((camera.x_offset + x as f32) * camera.zoom_multiplier);
 
-    let out_y = screen_height() / 2. + ((camera.y_offset + y as f32 * 2.) * camera.zoom_multiplier);
+    let out_y = screen_height() / 2. + ((camera.y_offset + y as f32) * camera.zoom_multiplier);
 
     (out_x, out_y)
 }
@@ -95,7 +95,7 @@ fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     // let x_out = (camera.x_offset / camera.zoom_multiplier);
     // let y_out = (camera.y_offset / camera.zoom_multiplier);
 
-    // camera.zoom_multiplier * IMAGE_TILE_WIDTH
+    // camera.zoom_multiplier * tile_dimensions.0
 
     // tile width matters
 
@@ -113,6 +113,13 @@ fn value_in_range(value: f32, min: f32, max: f32) -> bool {
     (value >= min) && (value <= max)
 }
 
+/// returns true if two rectangles overlap
+/// 
+/// Resources:
+/// 
+/// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+/// 
+/// https://silentmatt.com/rectangle-intersection/
 fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
     let x_overlap =
         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
@@ -137,12 +144,23 @@ async fn main() {
         zoom_multiplier: 1.0,
     };
 
+    let mut tile_dimensions: (f32,f32) = (0.,0.);
+
     // load texture cache
     let mut max_zoom_level: u32 = 0;
     let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0.. {
         if PathBuf::from(tile_dir.to_owned() + &x.to_string()).is_dir() {
-            texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap()).await);
+            // get initial tile dimensions
+            if x == 0{
+                let files = get_files_in_dir(&(tile_dir.to_owned() + &0.to_string()), "").unwrap();
+
+                let texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
+                tile_dimensions.0 = texture.width();
+                tile_dimensions.1 = texture.height();
+            }
+
+            texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap(), tile_dir, tile_dimensions).await);
             max_zoom_level = x;
         } else {
             break;
@@ -204,7 +222,7 @@ async fn main() {
             }
 
             // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 10.);
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 20.);
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
@@ -250,21 +268,21 @@ async fn main() {
                 let sx = screen_width() / 2.
                     + (camera.x_offset * camera.zoom_multiplier)
                     + sector.0 as f32
-                        * IMAGE_TILE_WIDTH as f32
+                        * tile_dimensions.0 as f32
                         * camera.zoom_multiplier
                         * two.powf(lod as f32);
 
                 let sy = screen_height() / 2.
                     + (camera.y_offset * camera.zoom_multiplier)
                     + sector.1 as f32
-                        * IMAGE_TILE_HEIGHT as f32
+                        * tile_dimensions.1 as f32
                         * camera.zoom_multiplier
                         * two.powf(lod as f32);
 
                 let tile_width =
-                    IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                    tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
                 let tile_height =
-                    IMAGE_TILE_HEIGHT as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                    tile_dimensions.1 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
 
                 let tile_rect = Rectangle {
                     x: sx,
@@ -378,7 +396,7 @@ async fn main() {
         // tile width matters
 
         let sector_x = (camera.x_offset * camera.zoom_multiplier);
-        let tile_width = IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+        let tile_width = tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
 
         // draw blue line on map
         let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
