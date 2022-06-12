@@ -229,7 +229,7 @@ async fn main() {
 
             // let list_of_sectors_to_render = [(0, 0)];
 
-            let mut rendered_sectors = 0;
+            let mut rendered_tiles = 0;
             for (sector, _) in &texture_cache[lod] {
                 let sx = screen_width() / 2.
                     + (camera.x_offset * camera.zoom_multiplier)
@@ -266,7 +266,7 @@ async fn main() {
 
                 //if texture pos on screen
                 if rectangle_overlap(screen_rect, tile_rect) {
-                    rendered_sectors += 1;
+                    rendered_tiles += 1;
                     let texture = texture_cache[lod].get(&(sector.0, sector.1)).unwrap();
 
                     let params = DrawTextureParams {
@@ -282,18 +282,81 @@ async fn main() {
                 }
             }
         //<
-
+        
         draw_text(
-            &("LOD: ".to_owned() + &lod.to_string()),
+            &("fps: ".to_owned() + &get_fps().to_string()),
             20.0,
             20.0,
             30.0,
             WHITE,
         );
 
-        // draw circle at 0,0
-        let coords = coord_to_2d_pos(0, 13000, &camera);
+        draw_text(
+            &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
+            20.0,
+            40.0,
+            30.0,
+            WHITE,
+        );
+
+        draw_text(
+            &("LOD: ".to_owned() + &lod.to_string()),
+            20.0,
+            60.0,
+            30.0,
+            WHITE,
+        );
+
+        draw_text(
+            &("rendered_tiles: ".to_owned() + &rendered_tiles.to_string()),
+            20.0,
+            80.0,
+            30.0,
+            WHITE,
+        );
+
+        // draw_text(
+        //     &("camera.x_offset: ".to_owned() + &camera.x_offset.to_string()),
+        //     20.0,
+        //     20.0,
+        //     30.0,
+        //     WHITE,
+        // );
+
+        //red circle
+        // let red_circle_x = screen_width() / 2.;
+        // let red_circle_y = screen_height() / 2.;
+        // let screen_pos = screen_pos_to_coord(red_circle_x, red_circle_y, &camera);
+        // draw_circle(red_circle_x, red_circle_y, 15.0, RED);
+
+        // let mouse = mouse_position();
+        // draw_circle(mouse.0, mouse.1, 15.0, BLUE);
+        // let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
+        // draw_text(
+        //     &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
+        //     20.0,
+        //     60.0,
+        //     30.0,
+        //     WHITE,
+        // );
+
+        // draw_text(
+        //     &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
+        //     20.0,
+        //     80.0,
+        //     30.0,
+        //     WHITE,
+        // );
+
+
+        // draw beacon
+        let coords = coord_to_screen_pos(0, 13000, &camera);
         draw_circle(coords.0, coords.1, 5.0, YELLOW);
+        draw_text("Test beacon", coords.0, coords.1, 30.0, WHITE);
+
+        
+        let coords = coord_to_screen_pos(-4800, -5200, &camera);
+        draw_circle(coords.0, coords.1, 15.0, BLUE);
 
         // lod level matters
         // camera zoom matters
@@ -303,6 +366,12 @@ async fn main() {
         let sector_x = (camera.x_offset * camera.zoom_multiplier);
 
         let tile_width = IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+
+        let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
+
+        let coords2 = coord_to_screen_pos(13000, 0, &camera);
+
+        draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 15.0, BLUE);
 
         next_frame().await
     }
