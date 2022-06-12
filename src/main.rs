@@ -49,19 +49,22 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
+const tile_dir: &str = "./terrain/";
+
 async fn get_textures_for_zoom_level(level: u32) -> HashMap<(i32, i32), Texture2D> {
-    let files = get_files_in_dir(&("./terrain/".to_owned() + &level.to_string()), "").unwrap();
+    let files = get_files_in_dir(&(tile_dir.to_owned() + &level.to_string()), "").unwrap();
 
     let mut sector_to_texture = HashMap::new();
 
     for file in files {
+        // get sector from filename
         let file_name = file.file_stem().unwrap().to_str().unwrap();
         let split: Vec<&str> = file_name.split(',').collect();
         let x: i32 = split[0].parse().unwrap();
         let z: i32 = split[1].parse().unwrap();
 
+        // map sector to texture
         let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
-
         sector_to_texture.insert((x, z), texture);
     }
 
@@ -157,9 +160,15 @@ async fn main() {
     };
 
     // load texture cache
+    let mut max_zoom_level: u32 = 0;
     let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
-    for x in 0..7 {
-        texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap()).await);
+    for x in 0.. {
+        if PathBuf::from(tile_dir.to_owned() + &x.to_string()).is_dir() {
+            texture_cache.push(get_textures_for_zoom_level(x.try_into().unwrap()).await);
+            max_zoom_level = x;
+        } else {
+            break;
+        }
     }
 
     loop {
@@ -168,7 +177,6 @@ async fn main() {
         // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
         // draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
         // draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
-
         // draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
         //> react to key presses
@@ -209,21 +217,16 @@ async fn main() {
         //<> get LOD
 
             let two: f32 = 2.0;
-            let lod = if camera.zoom_multiplier < 1. / two.powf(6.) {
-                6
-            } else if camera.zoom_multiplier < 1. / two.powf(5.) {
-                5
-            } else if camera.zoom_multiplier < 1. / two.powf(4.) {
-                4
-            } else if camera.zoom_multiplier < 1. / two.powf(3.) {
-                3
-            } else if camera.zoom_multiplier < 1. / two.powf(2.) {
-                2
-            } else if camera.zoom_multiplier < 1. / two.powf(1.) {
-                1
-            } else {
-                0
-            };
+            let mut lod: usize = 0;
+            for level in 0..=max_zoom_level {
+                if camera.zoom_multiplier < 1. / two.powf(level as f32) {
+                    lod = level as usize;
+                } else {
+                    break;
+                }
+            }
+            // re-make immutable
+            let lod = lod;
 
         //<> draw all textures
 
@@ -282,7 +285,7 @@ async fn main() {
                 }
             }
         //<
-        
+
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
             20.0,
@@ -348,13 +351,11 @@ async fn main() {
         //     WHITE,
         // );
 
-
         // draw beacon
         let coords = coord_to_screen_pos(0, 13000, &camera);
         draw_circle(coords.0, coords.1, 5.0, YELLOW);
         draw_text("Test beacon", coords.0, coords.1, 30.0, WHITE);
 
-        
         let coords = coord_to_screen_pos(-4800, -5200, &camera);
         draw_circle(coords.0, coords.1, 15.0, BLUE);
 
@@ -364,13 +365,11 @@ async fn main() {
         // tile width matters
 
         let sector_x = (camera.x_offset * camera.zoom_multiplier);
-
         let tile_width = IMAGE_TILE_WIDTH as f32 * camera.zoom_multiplier * two.powf(lod as f32);
 
+        // draw blue line on map
         let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
-
         let coords2 = coord_to_screen_pos(13000, 0, &camera);
-
         draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 15.0, BLUE);
 
         next_frame().await
