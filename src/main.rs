@@ -123,28 +123,6 @@ fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
     x_overlap && y_overlap
 }
 
-// struct rect
-// {
-//     int x;
-//     int y;
-//     int width;
-//     int height;
-// };
-
-// bool valueInRange(int value, int min, int max)
-// { return (value >= min) && (value <= max); }
-
-// bool rectOverlap(rect A, rect B)
-// {
-//     bool xOverlap = valueInRange(A.x, B.x, B.x + B.width) ||
-//                     valueInRange(B.x, A.x, A.x + A.width);
-
-//     bool yOverlap = valueInRange(A.y, B.y, B.y + B.height) ||
-//                     valueInRange(B.y, A.y, A.y + A.height);
-
-//     return xOverlap && yOverlap;
-// }
-
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -205,11 +183,20 @@ async fn main() {
                 camera.zoom_multiplier / 100.
             };
 
+            // zoom via buttons
             if is_key_down(KeyCode::E) {
                 camera.zoom_multiplier += zoom_speed;
             }
             if is_key_down(KeyCode::Q) {
                 camera.zoom_multiplier -= zoom_speed;
+            }
+
+            // zoom via scroll wheel
+            let (_, mouse_scroll) = mouse_wheel();
+            if mouse_scroll == 1.0{
+                camera.zoom_multiplier += zoom_speed * 10.;
+            } else if mouse_scroll == -1.0{
+                camera.zoom_multiplier -= zoom_speed * 10.;
             }
 
             camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 10.);
