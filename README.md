@@ -1,2 +1,2 @@
-# tile image viewer\
+# tile image viewer
  
