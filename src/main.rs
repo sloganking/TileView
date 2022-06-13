@@ -338,7 +338,6 @@ async fn main() {
         );
 
         let mouse = mouse_position();
-        draw_circle(mouse.0, mouse.1, 5.0, BLUE);
         let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
         draw_text(
             &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
@@ -364,19 +363,19 @@ async fn main() {
         //     WHITE,
         // );
 
-        // draw beacon
-        let coords = coord_to_screen_pos(0, 13000, &camera);
-        draw_circle(coords.0, coords.1, 5.0, YELLOW);
-        draw_text("Test beacon", coords.0, coords.1, 30.0, WHITE);
+        // // draw beacon
+        // let coords = coord_to_screen_pos(0, 13000, &camera);
+        // draw_circle(coords.0, coords.1, 5.0, YELLOW);
+        // draw_text("Test beacon", coords.0, coords.1, 30.0, WHITE);
 
-        // draw blue line on map
-        let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
-        let coords2 = coord_to_screen_pos(13000, 0, &camera);
-        draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 15.0, BLUE);
+        // // draw blue line on map
+        // let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
+        // let coords2 = coord_to_screen_pos(13000, 0, &camera);
+        // draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 15.0, BLUE);
 
-        // draw dot at end of line
-        let coords = coord_to_screen_pos(-4800, -5200, &camera);
-        draw_circle(coords.0, coords.1, 15.0, BLUE);
+        // // draw dot at end of line
+        // let coords = coord_to_screen_pos(-4800, -5200, &camera);
+        // draw_circle(coords.0, coords.1, 15.0, BLUE);
 
         next_frame().await
     }
