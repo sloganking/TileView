@@ -315,6 +315,7 @@ async fn main() {
                             newly_retrieved += 1;
                             let texture_option = match load_texture(&texture_dir).await {
                                 Ok(texture) => {
+                                    texture.set_filter(FilterMode::Nearest);
                                     hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
                                     Some(texture)
                                 }
