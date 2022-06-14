@@ -154,25 +154,21 @@ struct CameraSettings {
 #[macroquad::main("Map Renderer")]
 async fn main() {
 
+    // get initial tile dimensions
     let mut tile_dimensions: (f32, f32) = (0., 0.);
+    let files = get_files_in_dir(&(TILE_DIR.to_owned() + &0.to_string()), "").unwrap();
+    let texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
+    tile_dimensions.0 = texture.width();
+    tile_dimensions.1 = texture.height();
 
     // load texture cache
     let mut max_lod: u32 = 0;
-    let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
+    // let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0.. {
         if PathBuf::from(TILE_DIR.to_owned() + &x.to_string()).is_dir() {
-            // get initial tile dimensions
-            if x == 0 {
-                let files = get_files_in_dir(&(TILE_DIR.to_owned() + &0.to_string()), "").unwrap();
-
-                let texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
-                tile_dimensions.0 = texture.width();
-                tile_dimensions.1 = texture.height();
-            }
-
-            texture_cache.push(
-                get_textures_for_zoom_level(x.try_into().unwrap(), TILE_DIR, tile_dimensions).await,
-            );
+            // texture_cache.push(
+            //     get_textures_for_zoom_level(x.try_into().unwrap(), TILE_DIR, tile_dimensions).await,
+            // );
             max_lod = x;
         } else {
             break;
@@ -301,7 +297,16 @@ async fn main() {
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
+                    let texture_dir = TILE_DIR.to_owned()
+                        + &lod.to_string()
+                        + "/"
+                        + &sector_x.to_string()
+                        + ","
+                        + &sector_y.to_string()
+                        + ".png";
+
+                    // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
+                    if let Ok(texture) = load_texture(&texture_dir).await {
                         rendered_tiles += 1;
 
                         let sx = screen_width() / 2.
@@ -332,7 +337,7 @@ async fn main() {
                             pivot: None,
                         };
 
-                        draw_texture_ex(*texture, sx, sy, WHITE, params);
+                        draw_texture_ex(texture, sx, sy, WHITE, params);
                     }
                 }
             }
