@@ -46,7 +46,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./cat/";
+const TILE_DIR: &str = "./terrain/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
@@ -162,7 +162,7 @@ async fn main() {
     let mut tile_dimensions: (f32, f32) = (0., 0.);
 
     // load texture cache
-    let mut max_zoom_level: u32 = 0;
+    let mut max_lod: u32 = 0;
     let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0.. {
         if PathBuf::from(TILE_DIR.to_owned() + &x.to_string()).is_dir() {
@@ -178,7 +178,7 @@ async fn main() {
             texture_cache.push(
                 get_textures_for_zoom_level(x.try_into().unwrap(), TILE_DIR, tile_dimensions).await,
             );
-            max_zoom_level = x;
+            max_lod = x;
         } else {
             break;
         }
@@ -239,7 +239,9 @@ async fn main() {
             }
 
             // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(0.01, 20.);
+            let two: f32 = 2.0;
+            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
@@ -266,7 +268,7 @@ async fn main() {
 
             let two: f32 = 2.0;
             let mut lod: usize = 0;
-            for level in 0..=max_zoom_level {
+            for level in 0..=max_lod {
                 if camera.zoom_multiplier < 1. / two.powf(level as f32) {
                     lod = level as usize;
                 } else {
