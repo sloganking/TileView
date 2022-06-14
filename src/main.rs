@@ -159,6 +159,7 @@ async fn main() {
     let texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
     tile_dimensions.0 = texture.width();
     tile_dimensions.1 = texture.height();
+    texture.delete();
 
     // load texture cache
     let mut max_lod: u32 = 0;
