@@ -367,12 +367,26 @@ async fn main() {
             }
         //<
 
-        // clean up any unrendered textures
-        hdd_texture_cache.retain(|(sec_x, sec_y, sec_lod), _v| {
-            (lod == *sec_lod)
-                && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0)
-        });
+        //>  clean up any unrendered textures
+
+            // find tiles to remove
+            let mut to_remove = Vec::new();
+            for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
+                if !((lod == *sec_lod)
+                    && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                    && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                {
+                    to_remove.push((*sec_x, *sec_y, *sec_lod));
+                }
+            }
+
+            // remove tiles
+            for (sec_x, sec_y, sec_lod) in to_remove {
+                if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                    texture.delete();
+                }
+            }
+        //<
 
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
