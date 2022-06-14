@@ -153,7 +153,6 @@ struct CameraSettings {
 
 #[macroquad::main("Map Renderer")]
 async fn main() {
-
     // get initial tile dimensions
     let mut tile_dimensions: (f32, f32) = (0., 0.);
     let files = get_files_in_dir(&(TILE_DIR.to_owned() + &0.to_string()), "").unwrap();
@@ -188,6 +187,7 @@ async fn main() {
     let mut clicked_in_x_offset: f32 = 0.0;
     let mut clicked_in_y_offset: f32 = 0.0;
 
+    let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
     loop {
         clear_background(GRAY);
 
@@ -294,6 +294,7 @@ async fn main() {
 
             let mut rendered_tiles = 0;
 
+            let mut newly_retrieved = 0;
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
@@ -306,7 +307,29 @@ async fn main() {
                         + ".png";
 
                     // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
-                    if let Ok(texture) = load_texture(&texture_dir).await {
+
+                    // determine texture
+                    let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
+                        Some(texture_option) => *texture_option,
+                        None => {
+                            newly_retrieved += 1;
+                            let texture_option = match load_texture(&texture_dir).await {
+                                Ok(texture) => {
+                                    hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
+                                    Some(texture)
+                                }
+
+                                _ => {
+                                    hdd_texture_cache.insert((sector_x, sector_y, lod), None);
+                                    None
+                                }
+                            };
+                            texture_option
+                        }
+                    };
+
+                    // render texture
+                    if let Some(texture) = texture_option {
                         rendered_tiles += 1;
 
                         let sx = screen_width() / 2.
@@ -342,6 +365,13 @@ async fn main() {
                 }
             }
         //<
+
+        // clean up any unrendered textures
+        hdd_texture_cache.retain(|(sec_x, sec_y, sec_lod), _v| {
+            (lod == *sec_lod)
+                && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0)
+        });
 
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
