@@ -153,11 +153,6 @@ struct CameraSettings {
 
 #[macroquad::main("Map Renderer")]
 async fn main() {
-    let mut camera = CameraSettings {
-        x_offset: 0.,
-        y_offset: 0.,
-        zoom_multiplier: 1.0,
-    };
 
     let mut tile_dimensions: (f32, f32) = (0., 0.);
 
@@ -183,6 +178,15 @@ async fn main() {
             break;
         }
     }
+
+    let two: f32 = 2.0;
+    let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
+
+    let mut camera = CameraSettings {
+        x_offset: 0.,
+        y_offset: 0.,
+        zoom_multiplier: default_zoom,
+    };
 
     let mut mouse_clicked_in_position: Option<(f32, f32)> = None;
     let mut clicked_in_x_offset: f32 = 0.0;
