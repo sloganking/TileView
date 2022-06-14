@@ -46,7 +46,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./terrain/";
+const TILE_DIR: &str = "./cat/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
@@ -114,6 +114,35 @@ fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
     x_overlap && y_overlap
+}
+
+fn sector_at_screen_pos(
+    x: f32,
+    y: f32,
+    camera: &CameraSettings,
+    tile_dimensions: (f32, f32),
+    lod: usize,
+) -> (i32, i32) {
+    let two: f32 = 2.0;
+    let screen_point_coords = screen_pos_to_coord(x, y, &camera);
+
+    // get sector x
+    let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
+    let screen_point_sector_x = if screen_point_coords.0 < 0.0 {
+        (screen_point_coords.0 / tile_world_x_size) as i32 - 1
+    } else {
+        (screen_point_coords.0 / tile_world_x_size) as i32
+    };
+
+    // get sector y
+    let tile_world_y_size = tile_dimensions.1 as f32 * two.powf(lod as f32);
+    let screen_point_sector_y = if screen_point_coords.1 < 0.0 {
+        (screen_point_coords.1 / tile_world_y_size) as i32 - 1
+    } else {
+        (screen_point_coords.1 / tile_world_y_size) as i32
+    };
+
+    (screen_point_sector_x, screen_point_sector_y)
 }
 
 struct CameraSettings {
@@ -249,58 +278,56 @@ async fn main() {
 
         //<> draw all textures
 
-            // let list_of_sectors_to_render = [(0, 0)];
+            //get top left sector to render
+            let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+
+            //get bottom right sector to render
+            let bottom_right_sector = sector_at_screen_pos(
+                screen_width(),
+                screen_height(),
+                &camera,
+                tile_dimensions,
+                lod,
+            );
 
             let mut rendered_tiles = 0;
-            for (sector, _) in &texture_cache[lod] {
-                let sx = screen_width() / 2.
-                    + (camera.x_offset * camera.zoom_multiplier)
-                    + sector.0 as f32
-                        * tile_dimensions.0 as f32
-                        * camera.zoom_multiplier
-                        * two.powf(lod as f32);
 
-                let sy = screen_height() / 2.
-                    + (camera.y_offset * camera.zoom_multiplier)
-                    + sector.1 as f32
-                        * tile_dimensions.1 as f32
-                        * camera.zoom_multiplier
-                        * two.powf(lod as f32);
+            // for all sectors to render
+            for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+                    if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
+                        rendered_tiles += 1;
 
-                let tile_width =
-                    tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
-                let tile_height =
-                    tile_dimensions.1 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                        let sx = screen_width() / 2.
+                            + (camera.x_offset * camera.zoom_multiplier)
+                            + sector_x as f32
+                                * tile_dimensions.0 as f32
+                                * camera.zoom_multiplier
+                                * two.powf(lod as f32);
 
-                let tile_rect = Rectangle {
-                    x: sx,
-                    y: sy,
-                    width: tile_width,
-                    height: tile_height,
-                };
+                        let sy = screen_height() / 2.
+                            + (camera.y_offset * camera.zoom_multiplier)
+                            + sector_y as f32
+                                * tile_dimensions.1 as f32
+                                * camera.zoom_multiplier
+                                * two.powf(lod as f32);
 
-                let screen_rect = Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: screen_width(),
-                    height: screen_height(),
-                };
+                        let tile_width =
+                            tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                        let tile_height =
+                            tile_dimensions.1 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
 
-                //if texture pos on screen
-                if rectangle_overlap(screen_rect, tile_rect) {
-                    rendered_tiles += 1;
-                    let texture = texture_cache[lod].get(&(sector.0, sector.1)).unwrap();
+                        let params = DrawTextureParams {
+                            dest_size: Some(vec2(tile_width, tile_height)),
+                            source: None,
+                            rotation: 0.,
+                            flip_x: false,
+                            flip_y: false,
+                            pivot: None,
+                        };
 
-                    let params = DrawTextureParams {
-                        dest_size: Some(vec2(tile_width, tile_height)),
-                        source: None,
-                        rotation: 0.,
-                        flip_x: false,
-                        flip_y: false,
-                        pivot: None,
-                    };
-
-                    draw_texture_ex(*texture, sx, sy, WHITE, params);
+                        draw_texture_ex(*texture, sx, sy, WHITE, params);
+                    }
                 }
             }
         //<
