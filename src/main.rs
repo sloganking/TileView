@@ -1,5 +1,10 @@
+use futures::task::Spawn;
 use glob::{glob, GlobError};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use macroquad::prelude::*;
 
@@ -46,7 +51,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/terrain/";
+const TILE_DIR: &str = "./tile_images/moon/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
@@ -145,6 +150,35 @@ fn sector_at_screen_pos(
     (screen_point_sector_x, screen_point_sector_y)
 }
 
+/// stores texture in hdd_texture_cache. Does not check if it is already there.
+async fn cache_texture(
+    tile_data: (i32, i32, usize),
+    mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>>,
+) {
+    let (sector_x, sector_y, lod) = tile_data;
+
+    let texture_dir = TILE_DIR.to_owned()
+        + &lod.to_string()
+        + "/"
+        + &sector_x.to_string()
+        + ","
+        + &sector_y.to_string()
+        + ".png";
+
+    match load_texture(&texture_dir).await {
+        Ok(texture) => {
+            texture.set_filter(FilterMode::Nearest);
+            let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
+            hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
+        }
+
+        _ => {
+            let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
+            hdd_texture_cache.insert((sector_x, sector_y, lod), None);
+        }
+    };
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -188,7 +222,16 @@ async fn main() {
     let mut clicked_in_x_offset: f32 = 0.0;
     let mut clicked_in_y_offset: f32 = 0.0;
 
-    let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
+    let mut arc_mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    use futures::executor::LocalPool;
+    use futures::future::{pending, ready};
+    use futures::task::LocalSpawnExt;
+
+    let mut pool = LocalPool::new();
+    let spawner = pool.spawner();
+
     loop {
         clear_background(GRAY);
 
@@ -278,9 +321,7 @@ async fn main() {
             }
             // re-make immutable
             let lod = lod;
-
-        //<> draw all textures
-
+        //<> determine what sectors we need to render
             //get top left sector to render
             let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
 
@@ -292,10 +333,25 @@ async fn main() {
                 tile_dimensions,
                 lod,
             );
+        //<> cache uncached textures
+            // for all sectors to render
+            // for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+            //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+
+            //         // // futures::run(fut);
+
+            //         // use futures::executor::LocalPool;
+
+            //         // let mut pool = LocalPool::new();
+
+            //         // pool.spawn_local()
+            //         // pool.run();
+            //     }
+            // }
+        //<> draw all textures
 
             let mut rendered_tiles = 0;
 
-            let mut newly_retrieved = 0;
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
@@ -310,25 +366,28 @@ async fn main() {
                     // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
 
                     // determine texture
-                    let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
-                        Some(texture_option) => *texture_option,
-                        None => {
-                            newly_retrieved += 1;
-                            let texture_option = match load_texture(&texture_dir).await {
-                                Ok(texture) => {
-                                    texture.set_filter(FilterMode::Nearest);
-                                    hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
-                                    Some(texture)
-                                }
+                    let texture_option = {
+                        let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
+                        let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
+                        let get_option = hdd_texture_cache.get(&(sector_x, sector_y, lod));
 
-                                _ => {
-                                    hdd_texture_cache.insert((sector_x, sector_y, lod), None);
-                                    None
-                                }
-                            };
-                            texture_option
-                        }
+                        let texture_option = match get_option {
+                            Some(texture_option) => *texture_option,
+                            None => {
+                                drop(hdd_texture_cache);
+                                let f = cache_texture(
+                                    (sector_x, sector_y, lod),
+                                    arc_mutex_hdd_texture_cache2,
+                                );
+
+                                spawner.spawn_local(f).unwrap();
+                                None
+                            }
+                        };
+                        texture_option
                     };
+
+                    pool.run_until_stalled();
 
                     // render texture
                     if let Some(texture) = texture_option {
@@ -370,23 +429,28 @@ async fn main() {
 
         //>  clean up any unrendered textures
 
-            // find tiles to remove
-            let mut to_remove = Vec::new();
-            for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
-                if !((lod == *sec_lod)
-                    && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                    && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                {
-                    to_remove.push((*sec_x, *sec_y, *sec_lod));
+            {
+                let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
+
+                // find tiles to remove
+                let mut to_remove = Vec::new();
+                for ((sec_x, sec_y, sec_lod), _) in &*hdd_texture_cache {
+                    if !((lod == *sec_lod)
+                        && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                        && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                    {
+                        to_remove.push((*sec_x, *sec_y, *sec_lod));
+                    }
+                }
+
+                // remove tiles
+                for (sec_x, sec_y, sec_lod) in to_remove {
+                    if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                        texture.delete();
+                    }
                 }
             }
 
-            // remove tiles
-            for (sec_x, sec_y, sec_lod) in to_remove {
-                if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                    texture.delete();
-                }
-            }
         //<
 
         draw_text(
