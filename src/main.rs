@@ -307,21 +307,40 @@ async fn main() {
                         + &sector_y.to_string()
                         + ".png";
 
-                    // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
-
                     // determine texture
                     let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
                         Some(texture_option) => *texture_option,
                         None => {
                             newly_retrieved += 1;
-                            let texture_option = match load_texture(&texture_dir).await {
-                                Ok(texture) => {
+
+                            // let img_bytes = reqwest::blocking::get("https://raw.githubusercontent.com/ccmap/tiles/master/terrain/z0/0,0.png").unwrap().bytes().unwrap();
+
+                            // let texture = Texture2D::from_file_with_format(
+                            //     &img_bytes,
+                            //     None,
+                            //     );
+
+                            // if url valid
+
+                            let optional_dash = if lod == 0 { "" } else { "-" };
+                            let url = "...".to_owned()
+                                + optional_dash
+                                + &lod.to_string()
+                                + "/"
+                                + &sector_x.to_string()
+                                + ","
+                                + &sector_y.to_string()
+                                + ".png";
+                            println!("url: {}", &url);
+                            let texture_option = match reqwest::blocking::get(url) {
+                                Ok(response) => {
+                                    let img_bytes = response.bytes().unwrap();
+                                    let texture = Texture2D::from_file_with_format(&img_bytes, None);
                                     texture.set_filter(FilterMode::Nearest);
                                     hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
                                     Some(texture)
                                 }
-
-                                _ => {
+                                Err(_) => {
                                     hdd_texture_cache.insert((sector_x, sector_y, lod), None);
                                     None
                                 }
