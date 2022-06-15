@@ -46,7 +46,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./terrain/";
+const TILE_DIR: &str = "./tile_images/terrain/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
