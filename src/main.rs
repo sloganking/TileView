@@ -336,30 +336,30 @@ async fn main() {
                 }
             }
         //<> draw tile lines
-            if true {
-                // for all sectors to render
-                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                    let sy = screen_height() / 2.
-                        + (camera.y_offset * camera.zoom_multiplier)
-                        + sector_y as f32
-                            * tile_dimensions.1 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
+            // if true {
+            //     // for all sectors to render
+            //     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+            //         let sy = screen_height() / 2.
+            //             + (camera.y_offset * camera.zoom_multiplier)
+            //             + sector_y as f32
+            //                 * tile_dimensions.1 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
 
-                    draw_line(0., sy, screen_width(), sy, 3.0, GRAY);
-                }
+            //         draw_line(0., sy, screen_width(), sy, 3.0, GRAY);
+            //     }
 
-                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    let sx = screen_width() / 2.
-                        + (camera.x_offset * camera.zoom_multiplier)
-                        + sector_x as f32
-                            * tile_dimensions.0 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
+            //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            //         let sx = screen_width() / 2.
+            //             + (camera.x_offset * camera.zoom_multiplier)
+            //             + sector_x as f32
+            //                 * tile_dimensions.0 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
 
-                    draw_line(sx, 0., sx, screen_height(), 3.0, GRAY);
-                }
-            }
+            //         draw_line(sx, 0., sx, screen_height(), 3.0, GRAY);
+            //     }
+            // }
         //<
 
         draw_text(
