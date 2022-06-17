@@ -76,9 +76,9 @@ async fn get_textures_for_zoom_level(
     sector_to_texture
 }
 
-fn coord_to_screen_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
-    let out_x = screen_width() / 2. + ((camera.x_offset + x as f32) * camera.zoom_multiplier);
-    let out_y = screen_height() / 2. + ((camera.y_offset + y as f32) * camera.zoom_multiplier);
+fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+    let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
+    let out_y = screen_height() / 2. + ((camera.y_offset + y) * camera.zoom_multiplier);
     (out_x, out_y)
 }
 
@@ -301,29 +301,20 @@ async fn main() {
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                     if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
-                        rendered_tiles += 1;
+                        let tile_world_width = tile_dimensions.0 as f32 * two.powf(lod as f32);
+                        let tile_world_height = tile_dimensions.1 as f32 * two.powf(lod as f32);
 
-                        let sx = screen_width() / 2.
-                            + (camera.x_offset * camera.zoom_multiplier)
-                            + sector_x as f32
-                                * tile_dimensions.0 as f32
-                                * camera.zoom_multiplier
-                                * two.powf(lod as f32);
+                        let tile_screen_width = tile_world_width * camera.zoom_multiplier;
+                        let tile_screen_height = tile_world_height * camera.zoom_multiplier;
 
-                        let sy = screen_height() / 2.
-                            + (camera.y_offset * camera.zoom_multiplier)
-                            + sector_y as f32
-                                * tile_dimensions.1 as f32
-                                * camera.zoom_multiplier
-                                * two.powf(lod as f32);
+                        let tile_world_x = tile_world_width * sector_x as f32;
+                        let tile_world_y = tile_world_height * sector_y as f32;
 
-                        let tile_width =
-                            tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
-                        let tile_height =
-                            tile_dimensions.1 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                        let (tile_screen_x, tile_screen_y) =
+                            coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
 
                         let params = DrawTextureParams {
-                            dest_size: Some(vec2(tile_width, tile_height)),
+                            dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
                             source: None,
                             rotation: 0.,
                             flip_x: false,
@@ -331,7 +322,8 @@ async fn main() {
                             pivot: None,
                         };
 
-                        draw_texture_ex(*texture, sx, sy, WHITE, params);
+                        draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+                        rendered_tiles += 1;
                     }
                 }
             }
@@ -339,25 +331,25 @@ async fn main() {
             // if true {
             //     // for all sectors to render
             //     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-            //         let sy = screen_height() / 2.
+            //         let tile_screen_y = screen_height() / 2.
             //             + (camera.y_offset * camera.zoom_multiplier)
             //             + sector_y as f32
             //                 * tile_dimensions.1 as f32
             //                 * camera.zoom_multiplier
             //                 * two.powf(lod as f32);
 
-            //         draw_line(0., sy, screen_width(), sy, 3.0, GRAY);
+            //         draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, GRAY);
             //     }
 
             //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-            //         let sx = screen_width() / 2.
+            //         let tile_screen_x = screen_width() / 2.
             //             + (camera.x_offset * camera.zoom_multiplier)
             //             + sector_x as f32
             //                 * tile_dimensions.0 as f32
             //                 * camera.zoom_multiplier
             //                 * two.powf(lod as f32);
 
-            //         draw_line(sx, 0., sx, screen_height(), 3.0, GRAY);
+            //         draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, GRAY);
             //     }
             // }
         //<
