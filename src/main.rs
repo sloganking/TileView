@@ -255,7 +255,24 @@ async fn main() {
                 camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
                 camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
             } else if mouse_scroll == -1.0 {
+                // record mouse positions
+                let mouse_screen_pos = mouse_position();
+                let mouse_world_pos =
+                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+                // zoom out
                 camera.zoom_multiplier -= zoom_speed * 10.;
+
+                // center camera on where mouse was in world
+                camera.x_offset = -mouse_world_pos.0;
+                camera.y_offset = -mouse_world_pos.1;
+
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2 as f32;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2 as f32;
+
+                // move camera by screen_x_to_change
+                camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
             }
 
             // limit the zoom
