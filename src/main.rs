@@ -463,7 +463,7 @@ async fn main() {
                             pivot: None,
                         };
 
-                        draw_texture_ex(texture, sx, sy, WHITE, params);
+                        draw_texture_ex(texture, tile_screen_x, tile_screen_y, WHITE, params);
                         rendered_tiles += 1;
                     }
                 }
