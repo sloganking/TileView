@@ -88,33 +88,33 @@ fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     (x_out, y_out)
 }
 
-struct Rectangle {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-}
+// struct Rectangle {
+//     x: f32,
+//     y: f32,
+//     width: f32,
+//     height: f32,
+// }
 
-fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-    (value >= min) && (value <= max)
-}
+// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+//     (value >= min) && (value <= max)
+// }
 
-/// returns true if two rectangles overlap
-///
-/// Resources:
-///
-/// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-///
-/// https://silentmatt.com/rectangle-intersection/
-fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-    let x_overlap =
-        value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+// /// returns true if two rectangles overlap
+// ///
+// /// Resources:
+// ///
+// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+// ///
+// /// https://silentmatt.com/rectangle-intersection/
+// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+//     let x_overlap =
+//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
 
-    let y_overlap =
-        value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+//     let y_overlap =
+//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
-    x_overlap && y_overlap
-}
+//     x_overlap && y_overlap
+// }
 
 fn sector_at_screen_pos(
     x: f32,
@@ -124,7 +124,7 @@ fn sector_at_screen_pos(
     lod: usize,
 ) -> (i32, i32) {
     let two: f32 = 2.0;
-    let screen_point_coords = screen_pos_to_coord(x, y, &camera);
+    let screen_point_coords = screen_pos_to_coord(x, y, camera);
 
     // get sector x
     let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
@@ -169,9 +169,7 @@ async fn main() {
                 tile_dimensions.1 = texture.height();
             }
 
-            texture_cache.push(
-                get_textures_for_zoom_level(x.try_into().unwrap(), TILE_DIR, tile_dimensions).await,
-            );
+            texture_cache.push(get_textures_for_zoom_level(x, TILE_DIR, tile_dimensions).await);
             max_lod = x;
         } else {
             break;
@@ -237,7 +235,6 @@ async fn main() {
             let max_zoom = 20.0;
 
             // limit the zoom
-            let two: f32 = 2.0;
             camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
             // zoom via scroll wheel
@@ -252,15 +249,14 @@ async fn main() {
                 camera.zoom_multiplier += zoom_speed * 10.;
 
                 // limit the zoom
-                let two: f32 = 2.0;
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
                 camera.x_offset = -mouse_world_pos.0;
                 camera.y_offset = -mouse_world_pos.1;
 
-                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2 as f32;
-                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2 as f32;
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
 
                 // move camera by screen_x_to_change
                 camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
@@ -275,15 +271,14 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed * 10.;
 
                 // limit the zoom
-                let two: f32 = 2.0;
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
                 camera.x_offset = -mouse_world_pos.0;
                 camera.y_offset = -mouse_world_pos.1;
 
-                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2 as f32;
-                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2 as f32;
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
 
                 // move camera by screen_x_to_change
                 camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
