@@ -50,6 +50,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
+
 const TILE_DIR: &str = "./tile_images/moon/";
 
 async fn get_textures_for_zoom_level(
@@ -80,9 +81,9 @@ async fn get_textures_for_zoom_level(
     sector_to_texture
 }
 
-fn coord_to_screen_pos(x: i32, y: i32, camera: &CameraSettings) -> (f32, f32) {
-    let out_x = screen_width() / 2. + ((camera.x_offset + x as f32) * camera.zoom_multiplier);
-    let out_y = screen_height() / 2. + ((camera.y_offset + y as f32) * camera.zoom_multiplier);
+fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+    let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
+    let out_y = screen_height() / 2. + ((camera.y_offset + y) * camera.zoom_multiplier);
     (out_x, out_y)
 }
 
@@ -92,33 +93,33 @@ fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     (x_out, y_out)
 }
 
-struct Rectangle {
-    x: f32,
-    y: f32,
-    width: f32,
-    height: f32,
-}
+// struct Rectangle {
+//     x: f32,
+//     y: f32,
+//     width: f32,
+//     height: f32,
+// }
 
-fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-    (value >= min) && (value <= max)
-}
+// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+//     (value >= min) && (value <= max)
+// }
 
-/// returns true if two rectangles overlap
-///
-/// Resources:
-///
-/// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-///
-/// https://silentmatt.com/rectangle-intersection/
-fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-    let x_overlap =
-        value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+// /// returns true if two rectangles overlap
+// ///
+// /// Resources:
+// ///
+// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+// ///
+// /// https://silentmatt.com/rectangle-intersection/
+// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+//     let x_overlap =
+//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
 
-    let y_overlap =
-        value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+//     let y_overlap =
+//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
-    x_overlap && y_overlap
-}
+//     x_overlap && y_overlap
+// }
 
 fn sector_at_screen_pos(
     x: f32,
@@ -128,7 +129,7 @@ fn sector_at_screen_pos(
     lod: usize,
 ) -> (i32, i32) {
     let two: f32 = 2.0;
-    let screen_point_coords = screen_pos_to_coord(x, y, &camera);
+    let screen_point_coords = screen_pos_to_coord(x, y, camera);
 
     // get sector x
     let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
@@ -284,18 +285,59 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed;
             }
 
-            // zoom via scroll wheel
-            let (_, mouse_scroll) = mouse_wheel();
-            if mouse_scroll == 1.0 {
-                camera.zoom_multiplier += zoom_speed * 10.;
-            } else if mouse_scroll == -1.0 {
-                camera.zoom_multiplier -= zoom_speed * 10.;
-            }
+            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
+            let max_zoom = 20.0;
 
             // limit the zoom
-            let two: f32 = 2.0;
-            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
             camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+            // zoom via scroll wheel
+            let (_, mouse_scroll) = mouse_wheel();
+            if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
+                // record mouse positions
+                let mouse_screen_pos = mouse_position();
+                let mouse_world_pos =
+                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+                // zoom in
+                camera.zoom_multiplier += zoom_speed * 10.;
+
+                // limit the zoom
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+                // center camera on where mouse was in world
+                camera.x_offset = -mouse_world_pos.0;
+                camera.y_offset = -mouse_world_pos.1;
+
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+                // move camera by screen_x_to_change
+                camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
+            } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
+                // record mouse positions
+                let mouse_screen_pos = mouse_position();
+                let mouse_world_pos =
+                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+                // zoom out
+                camera.zoom_multiplier -= zoom_speed * 10.;
+
+                // limit the zoom
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+                // center camera on where mouse was in world
+                camera.x_offset = -mouse_world_pos.0;
+                camera.y_offset = -mouse_world_pos.1;
+
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+                // move camera by screen_x_to_change
+                camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
+            }
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
@@ -398,29 +440,22 @@ async fn main() {
 
                     // render texture
                     if let Some(texture) = texture_option {
-                        rendered_tiles += 1;
+                      
+                        let tile_world_width = tile_dimensions.0 as f32 * two.powf(lod as f32);
+                        let tile_world_height = tile_dimensions.1 as f32 * two.powf(lod as f32);
 
-                        let sx = screen_width() / 2.
-                            + (camera.x_offset * camera.zoom_multiplier)
-                            + sector_x as f32
-                                * tile_dimensions.0 as f32
-                                * camera.zoom_multiplier
-                                * two.powf(lod as f32);
+                        let tile_screen_width = tile_world_width * camera.zoom_multiplier;
+                        let tile_screen_height = tile_world_height * camera.zoom_multiplier;
 
-                        let sy = screen_height() / 2.
-                            + (camera.y_offset * camera.zoom_multiplier)
-                            + sector_y as f32
-                                * tile_dimensions.1 as f32
-                                * camera.zoom_multiplier
-                                * two.powf(lod as f32);
 
-                        let tile_width =
-                            tile_dimensions.0 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
-                        let tile_height =
-                            tile_dimensions.1 as f32 * camera.zoom_multiplier * two.powf(lod as f32);
+                        let tile_world_x = tile_world_width * sector_x as f32;
+                        let tile_world_y = tile_world_height * sector_y as f32;
+
+                        let (tile_screen_x, tile_screen_y) =
+                            coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
 
                         let params = DrawTextureParams {
-                            dest_size: Some(vec2(tile_width, tile_height)),
+                            dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
                             source: None,
                             rotation: 0.,
                             flip_x: false,
@@ -429,6 +464,7 @@ async fn main() {
                         };
 
                         draw_texture_ex(texture, sx, sy, WHITE, params);
+                        rendered_tiles += 1;
                     }
                 }
             }
@@ -459,6 +495,31 @@ async fn main() {
                 }
             }
 
+        //<> draw tile lines
+            // if true {
+            //     // for all sectors to render
+            //     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+            //         let tile_screen_y = screen_height() / 2.
+            //             + (camera.y_offset * camera.zoom_multiplier)
+            //             + sector_y as f32
+            //                 * tile_dimensions.1 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
+
+            //         draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, GRAY);
+            //     }
+
+            //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            //         let tile_screen_x = screen_width() / 2.
+            //             + (camera.x_offset * camera.zoom_multiplier)
+            //             + sector_x as f32
+            //                 * tile_dimensions.0 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
+
+            //         draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, GRAY);
+            //     }
+            // }
         //<
 
         draw_text(
