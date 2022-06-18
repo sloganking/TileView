@@ -233,9 +233,16 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed;
             }
 
+            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
+            let max_zoom = 20.0;
+
+            // limit the zoom
+            let two: f32 = 2.0;
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
             // zoom via scroll wheel
             let (_, mouse_scroll) = mouse_wheel();
-            if mouse_scroll == 1.0 {
+            if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
                 // record mouse positions
                 let mouse_screen_pos = mouse_position();
                 let mouse_world_pos =
@@ -243,6 +250,10 @@ async fn main() {
 
                 // zoom in
                 camera.zoom_multiplier += zoom_speed * 10.;
+
+                // limit the zoom
+                let two: f32 = 2.0;
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
                 camera.x_offset = -mouse_world_pos.0;
@@ -254,7 +265,7 @@ async fn main() {
                 // move camera by screen_x_to_change
                 camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
                 camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
-            } else if mouse_scroll == -1.0 {
+            } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
                 // record mouse positions
                 let mouse_screen_pos = mouse_position();
                 let mouse_world_pos =
@@ -262,6 +273,10 @@ async fn main() {
 
                 // zoom out
                 camera.zoom_multiplier -= zoom_speed * 10.;
+
+                // limit the zoom
+                let two: f32 = 2.0;
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
                 camera.x_offset = -mouse_world_pos.0;
@@ -274,11 +289,6 @@ async fn main() {
                 camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
                 camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
             }
-
-            // limit the zoom
-            let two: f32 = 2.0;
-            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
