@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 macroquad = "0.3"
+futures = {version = "0.3.21", features = ["thread-pool", "executor"]}
 glob = "0.3.0"
-futures = "0.3.21"
+image = "0.23.14"

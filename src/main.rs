@@ -1,4 +1,4 @@
-use futures::task::Spawn;
+use futures::task::{Spawn, SpawnExt};
 use glob::{glob, GlobError};
 use std::{
     collections::HashMap,
@@ -154,6 +154,7 @@ fn sector_at_screen_pos(
 async fn cache_texture(
     tile_data: (i32, i32, usize),
     mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>>,
+    mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
@@ -164,6 +165,31 @@ async fn cache_texture(
         + ","
         + &sector_y.to_string()
         + ".png";
+
+    // println!("texture_dir: {}",texture_dir);
+    // match load_texture("./tile_images/terrain/0/0,0.png").await{
+    //     _ => {}
+    // }
+
+    // match image::open(texture_dir) {
+    //     Ok(image) => {
+    //         // let texture = Texture2D::from_file_with_format(&img_bytes, None);
+
+    //         // println!("img_bytes.len(): {}",img_bytes.len());
+
+    //         let bytes = image.as_bytes();
+
+    //         let texture = Texture2D::from_rgba8(256 * 2, 256 * 2, &bytes);
+
+    //         texture.set_filter(FilterMode::Nearest);
+    //         let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
+    //         hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
+    //     },
+    //     Err(_) => {
+    //         let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
+    //         hdd_texture_cache.insert((sector_x, sector_y, lod), None);
+    //     },
+    // }
 
     match load_texture(&texture_dir).await {
         Ok(texture) => {
@@ -177,6 +203,9 @@ async fn cache_texture(
             hdd_texture_cache.insert((sector_x, sector_y, lod), None);
         }
     };
+
+    let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
+    retrieving_tile_map.remove(&tile_data);
 }
 
 struct CameraSettings {
@@ -229,9 +258,19 @@ async fn main() {
     use futures::future::{pending, ready};
     use futures::task::LocalSpawnExt;
 
-    let mut pool = LocalPool::new();
-    let spawner = pool.spawner();
+    // let mut pool = LocalPool::new();
+    // let spawner = pool.spawner();
 
+    use futures::executor::ThreadPool;
+
+    let pool = ThreadPool::new().unwrap();
+
+    // let future = async { /* ... */ };
+
+    let mut mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    let mut load_once = true;
     loop {
         clear_background(GRAY);
 
@@ -355,39 +394,41 @@ async fn main() {
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    let texture_dir = TILE_DIR.to_owned()
-                        + &lod.to_string()
-                        + "/"
-                        + &sector_x.to_string()
-                        + ","
-                        + &sector_y.to_string()
-                        + ".png";
-
                     // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
 
                     // determine texture
                     let texture_option = {
                         let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
-                        let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
-                        let get_option = hdd_texture_cache.get(&(sector_x, sector_y, lod));
+                        let mutex_retrieving_tile_map2 = mutex_retrieving_tile_map.clone();
+                        let hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
 
-                        let texture_option = match get_option {
+                        let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
                             Some(texture_option) => *texture_option,
                             None => {
                                 drop(hdd_texture_cache);
-                                let f = cache_texture(
-                                    (sector_x, sector_y, lod),
-                                    arc_mutex_hdd_texture_cache2,
-                                );
 
-                                spawner.spawn_local(f).unwrap();
+                                // only retrieve texture if not already retrieving
+                                let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
+                                if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
+                                    retrieving_tile_map.insert((sector_x, sector_y, lod), true);
+                                    let f = cache_texture(
+                                        (sector_x, sector_y, lod),
+                                        arc_mutex_hdd_texture_cache2,
+                                        mutex_retrieving_tile_map2,
+                                    );
+
+                                    // spawner.spawn_local(f).unwrap();
+
+                                    // [ERROR] segfaults whenever file exists
+                                    pool.spawn(f).unwrap();
+                                }
                                 None
                             }
                         };
                         texture_option
                     };
 
-                    pool.run_until_stalled();
+                    // pool.run_until_stalled();
 
                     // render texture
                     if let Some(texture) = texture_option {
@@ -450,7 +491,6 @@ async fn main() {
                     }
                 }
             }
-
         //<
 
         draw_text(
