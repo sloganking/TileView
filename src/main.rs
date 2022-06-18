@@ -1,4 +1,3 @@
-use futures::task::Spawn;
 use glob::{glob, GlobError};
 use std::{
     collections::HashMap,
@@ -154,6 +153,7 @@ fn sector_at_screen_pos(
 async fn cache_texture(
     tile_data: (i32, i32, usize),
     mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>>,
+    mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
@@ -177,6 +177,11 @@ async fn cache_texture(
             hdd_texture_cache.insert((sector_x, sector_y, lod), None);
         }
     };
+
+    // mark tile as no longer activly being retrieved
+    let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
+    retrieving_tile_map.remove(&tile_data);
+    drop(retrieving_tile_map);
 }
 
 struct CameraSettings {
@@ -222,7 +227,12 @@ async fn main() {
     let mut clicked_in_x_offset: f32 = 0.0;
     let mut clicked_in_y_offset: f32 = 0.0;
 
-    let mut arc_mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>> =
+    // stores cached textures
+    let arc_mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    // keeps track of which tiles are currently being retreived
+    let mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     use futures::executor::LocalPool;
@@ -355,39 +365,36 @@ async fn main() {
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    let texture_dir = TILE_DIR.to_owned()
-                        + &lod.to_string()
-                        + "/"
-                        + &sector_x.to_string()
-                        + ","
-                        + &sector_y.to_string()
-                        + ".png";
-
-                    // if let Some(texture) = texture_cache[lod].get(&(sector_x, sector_y)) {
-
                     // determine texture
                     let texture_option = {
                         let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
-                        let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
-                        let get_option = hdd_texture_cache.get(&(sector_x, sector_y, lod));
+                        let hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
+                        let mutex_retrieving_tile_map2 = mutex_retrieving_tile_map.clone();
 
-                        let texture_option = match get_option {
+                        let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
                             Some(texture_option) => *texture_option,
                             None => {
                                 drop(hdd_texture_cache);
-                                let f = cache_texture(
-                                    (sector_x, sector_y, lod),
-                                    arc_mutex_hdd_texture_cache2,
-                                );
 
-                                spawner.spawn_local(f).unwrap();
+                                let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
+                                if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
+                                    retrieving_tile_map.insert((sector_x, sector_y, lod), true);
+                                    drop(retrieving_tile_map);
+
+                                    let f = cache_texture(
+                                        (sector_x, sector_y, lod),
+                                        arc_mutex_hdd_texture_cache2,
+                                        mutex_retrieving_tile_map2,
+                                    );
+
+                                    spawner.spawn_local(f).unwrap();
+                                }
+
                                 None
                             }
                         };
                         texture_option
                     };
-
-                    pool.run_until_stalled();
 
                     // render texture
                     if let Some(texture) = texture_option {
@@ -425,10 +432,11 @@ async fn main() {
                     }
                 }
             }
-        //<
 
-        //>  clean up any unrendered textures
+            pool.try_run_one();
+            // pool.run_until_stalled();
 
+        //<>  clean up any unrendered textures
             {
                 let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
 
