@@ -50,8 +50,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-
-const TILE_DIR: &str = "./tile_images/moon/";
+const TILE_DIR: &str = "./tile_images/terrain/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
@@ -202,7 +201,7 @@ async fn main() {
     texture.delete();
 
     // load texture cache
-    let mut max_lod: u32 = 0;
+    let mut max_lod: usize = 0;
     // let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0.. {
         if PathBuf::from(TILE_DIR.to_owned() + &x.to_string()).is_dir() {
@@ -400,24 +399,20 @@ async fn main() {
             //         // pool.run();
             //     }
             // }
-        //<> draw all textures
+        //<> cache desired textures
 
-            let mut rendered_tiles = 0;
-
+            let hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                     // determine texture
                     let texture_option = {
                         let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
-                        let hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
                         let mutex_retrieving_tile_map2 = mutex_retrieving_tile_map.clone();
 
                         let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
                             Some(texture_option) => *texture_option,
                             None => {
-                                drop(hdd_texture_cache);
-
                                 let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
                                 if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
                                     retrieving_tile_map.insert((sector_x, sector_y, lod), true);
@@ -437,63 +432,111 @@ async fn main() {
                         };
                         texture_option
                     };
+                }
+            }
+        //<> draw all textures
 
-                    // render texture
-                    if let Some(texture) = texture_option {
-                      
-                        let tile_world_width = tile_dimensions.0 as f32 * two.powf(lod as f32);
-                        let tile_world_height = tile_dimensions.1 as f32 * two.powf(lod as f32);
+            let mut rendered_tiles = 0;
 
-                        let tile_screen_width = tile_world_width * camera.zoom_multiplier;
-                        let tile_screen_height = tile_world_height * camera.zoom_multiplier;
+            for lod in (0..=max_lod).rev() {
+                //> determine what sectors we need to render
+                    //get top left sector to render
+                    let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
 
+                    //get bottom right sector to render
+                    let bottom_right_sector = sector_at_screen_pos(
+                        screen_width(),
+                        screen_height(),
+                        &camera,
+                        tile_dimensions,
+                        lod,
+                    );
+                //<
 
-                        let tile_world_x = tile_world_width * sector_x as f32;
-                        let tile_world_y = tile_world_height * sector_y as f32;
+                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+                    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+                        // render texture
+                        if let Some(texture_option) = hdd_texture_cache.get(&(sector_x, sector_y, lod))
+                        {
+                            if let Some(texture) = texture_option {
+                                let tile_world_width = tile_dimensions.0 as f32 * two.powf(lod as f32);
+                                let tile_world_height = tile_dimensions.1 as f32 * two.powf(lod as f32);
 
-                        let (tile_screen_x, tile_screen_y) =
-                            coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
+                                let tile_screen_width = tile_world_width * camera.zoom_multiplier;
+                                let tile_screen_height = tile_world_height * camera.zoom_multiplier;
 
-                        let params = DrawTextureParams {
-                            dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
-                            source: None,
-                            rotation: 0.,
-                            flip_x: false,
-                            flip_y: false,
-                            pivot: None,
-                        };
+                                let tile_world_x = tile_world_width * sector_x as f32;
+                                let tile_world_y = tile_world_height * sector_y as f32;
 
-                        draw_texture_ex(texture, tile_screen_x, tile_screen_y, WHITE, params);
-                        rendered_tiles += 1;
+                                let (tile_screen_x, tile_screen_y) =
+                                    coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
+
+                                let params = DrawTextureParams {
+                                    dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
+                                    source: None,
+                                    rotation: 0.,
+                                    flip_x: false,
+                                    flip_y: false,
+                                    pivot: None,
+                                };
+
+                                draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+                                rendered_tiles += 1;
+                            }
+                        }
                     }
                 }
             }
+
+            drop(hdd_texture_cache);
 
             pool.try_run_one();
             // pool.run_until_stalled();
 
         //<>  clean up any unrendered textures
-            {
-                let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
+            let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
 
-                // find tiles to remove
-                let mut to_remove = Vec::new();
-                for ((sec_x, sec_y, sec_lod), _) in &*hdd_texture_cache {
-                    if !((lod == *sec_lod)
-                        && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                        && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                    {
-                        to_remove.push((*sec_x, *sec_y, *sec_lod));
+            //> remove tiles out of view
+
+            //<> determine if current desired view is fully rendered
+                let mut fully_rendered = true;
+                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+                    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+                        // render texture
+                        if hdd_texture_cache.get(&(sector_x, sector_y, lod)) == None {
+                            fully_rendered = false;
+                            break;
+                        }
+                    }
+                    if !fully_rendered {
+                        break;
                     }
                 }
 
-                // remove tiles
-                for (sec_x, sec_y, sec_lod) in to_remove {
-                    if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                        texture.delete();
+            //<> possibly remove tiles in wrong lod
+
+                // clear texture cache only if fully rendering what we want to be
+                if fully_rendered {
+                    // find tiles to remove
+                    let mut to_remove = Vec::new();
+                    for ((sec_x, sec_y, sec_lod), _) in &*hdd_texture_cache {
+                        if !((lod == *sec_lod)
+                            && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                            && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                        {
+                            to_remove.push((*sec_x, *sec_y, *sec_lod));
+                        }
+                    }
+
+                    // remove tiles
+                    for (sec_x, sec_y, sec_lod) in to_remove {
+                        if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                            texture.delete();
+                        }
                     }
                 }
-            }
+                drop(hdd_texture_cache);
+            //<
 
         //<> draw tile lines
             // if true {
