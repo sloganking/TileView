@@ -2,7 +2,10 @@ use glob::{glob, GlobError};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
 };
 
 use macroquad::prelude::*;
@@ -152,8 +155,8 @@ fn sector_at_screen_pos(
 /// stores texture in hdd_texture_cache. Does not check if it is already there.
 async fn cache_texture(
     tile_data: (i32, i32, usize),
-    mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>>,
     mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>>,
+    results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
@@ -165,18 +168,15 @@ async fn cache_texture(
         + &sector_y.to_string()
         + ".png";
 
-    match load_texture(&texture_dir).await {
+    let texture_option = match load_texture(&texture_dir).await {
         Ok(texture) => {
             texture.set_filter(FilterMode::Nearest);
-            let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
-            hdd_texture_cache.insert((sector_x, sector_y, lod), Some(texture));
+            Some(texture)
         }
-
-        _ => {
-            let mut hdd_texture_cache = mutex_hdd_texture_cache.lock().unwrap();
-            hdd_texture_cache.insert((sector_x, sector_y, lod), None);
-        }
+        _ => None,
     };
+
+    results_tx.send((tile_data, texture_option)).unwrap();
 
     // mark tile as no longer activly being retrieved
     let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
@@ -228,19 +228,19 @@ async fn main() {
     let mut clicked_in_y_offset: f32 = 0.0;
 
     // stores cached textures
-    let arc_mutex_hdd_texture_cache: Arc<Mutex<HashMap<(i32, i32, usize), Option<Texture2D>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
 
     // keeps track of which tiles are currently being retreived
     let mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     use futures::executor::LocalPool;
-    use futures::future::{pending, ready};
     use futures::task::LocalSpawnExt;
 
     let mut pool = LocalPool::new();
     let spawner = pool.spawner();
+
+    let (results_tx, results_rx) = mpsc::channel();
 
     loop {
         clear_background(GRAY);
@@ -401,39 +401,36 @@ async fn main() {
             // }
         //<> cache desired textures
 
-            let hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                     // determine texture
-                    let texture_option = {
-                        let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
-                        let mutex_retrieving_tile_map2 = mutex_retrieving_tile_map.clone();
+                    match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
+                        None => {
+                            let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
+                            if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
+                                retrieving_tile_map.insert((sector_x, sector_y, lod), true);
+                                drop(retrieving_tile_map);
 
-                        let texture_option = match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
-                            Some(texture_option) => *texture_option,
-                            None => {
-                                let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
-                                if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
-                                    retrieving_tile_map.insert((sector_x, sector_y, lod), true);
-                                    drop(retrieving_tile_map);
+                                let f = cache_texture(
+                                    (sector_x, sector_y, lod),
+                                    mutex_retrieving_tile_map.clone(),
+                                    results_tx.clone(),
+                                );
 
-                                    let f = cache_texture(
-                                        (sector_x, sector_y, lod),
-                                        arc_mutex_hdd_texture_cache2,
-                                        mutex_retrieving_tile_map2,
-                                    );
-
-                                    spawner.spawn_local(f).unwrap();
-                                }
-
-                                None
+                                spawner.spawn_local(f).unwrap();
                             }
-                        };
-                        texture_option
+                        }
+                        _ => {}
                     };
                 }
             }
+
+        //<> receive any retrieved tiles
+            for (details, texture_option) in results_rx.try_iter() {
+                hdd_texture_cache.insert(details, texture_option);
+            }
+
         //<> draw all textures
 
             let mut rendered_tiles = 0;
@@ -488,13 +485,10 @@ async fn main() {
                 }
             }
 
-            drop(hdd_texture_cache);
-
             pool.try_run_one();
             // pool.run_until_stalled();
 
         //<>  clean up any unrendered textures
-            let mut hdd_texture_cache = arc_mutex_hdd_texture_cache.lock().unwrap();
 
             //> remove tiles out of view
 
@@ -519,7 +513,7 @@ async fn main() {
                 if fully_rendered {
                     // find tiles to remove
                     let mut to_remove = Vec::new();
-                    for ((sec_x, sec_y, sec_lod), _) in &*hdd_texture_cache {
+                    for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
                         if !((lod == *sec_lod)
                             && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
                             && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
@@ -535,7 +529,6 @@ async fn main() {
                         }
                     }
                 }
-                drop(hdd_texture_cache);
             //<
 
         //<> draw tile lines
