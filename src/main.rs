@@ -53,34 +53,6 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 
 const TILE_DIR: &str = "./tile_images/terrain/";
 
-async fn get_textures_for_zoom_level(
-    level: u32,
-    directory: &str,
-    tile_dimensions: (f32, f32),
-) -> HashMap<(i32, i32), Texture2D> {
-    let files = get_files_in_dir(&(directory.to_owned() + &level.to_string()), "").unwrap();
-
-    let mut sector_to_texture = HashMap::new();
-
-    for file in files {
-        // get sector from filename
-        let file_name = file.file_stem().unwrap().to_str().unwrap();
-        let split: Vec<&str> = file_name.split(',').collect();
-        let x: i32 = split[0].parse().unwrap();
-        let z: i32 = split[1].parse().unwrap();
-
-        // map sector to texture
-        let texture: Texture2D = load_texture(file.to_str().unwrap()).await.unwrap();
-        texture.set_filter(FilterMode::Nearest);
-        if texture.width() != tile_dimensions.0 || texture.height() != tile_dimensions.1 {
-            panic!("File: \"{}\" has differing dimensions", file_name)
-        }
-        sector_to_texture.insert((x, z), texture);
-    }
-
-    sector_to_texture
-}
-
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> Point {
     let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
     let out_y = screen_height() / 2. + ((camera.y_offset + y) * camera.zoom_multiplier);
@@ -234,9 +206,13 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
                         "normal"
                     };
 
+                    
+
                     path_lines.push(PathLine{
-                        point1: Point { x: nodes[node]["x"].as_f64().unwrap() as f32, y: nodes[node]["z"].as_f64().unwrap() as f32 },
-                        point2: Point { x: nodes[neighbor]["x"].as_f64().unwrap() as f32, y: nodes[neighbor]["z"].as_f64().unwrap() as f32 },
+                        line: Line{
+                            point1: Point { x: nodes[node]["x"].as_f64().unwrap() as f32, y: nodes[node]["z"].as_f64().unwrap() as f32 },
+                            point2: Point { x: nodes[neighbor]["x"].as_f64().unwrap() as f32, y: nodes[neighbor]["z"].as_f64().unwrap() as f32 },
+                        },
                         color: pathtype_to_color(path_type),
                     });
                 }
@@ -256,9 +232,9 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
 }
 
 fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
-    for line in path_lines{
-        let coords1 = coord_to_screen_pos(line.point1.x + 0.5, line.point1.y + 0.5, &camera);
-        let coords2 = coord_to_screen_pos(line.point2.x + 0.5, line.point2.y + 0.5, &camera);
+    for path_line in path_lines{
+        let coords1 = coord_to_screen_pos(path_line.line.point1.x + 0.5, path_line.line.point1.y + 0.5, &camera);
+        let coords2 = coord_to_screen_pos(path_line.line.point2.x + 0.5, path_line.line.point2.y + 0.5, &camera);
 
         let line_line = Line{
             point1: Point { x: coords1.x, y: coords1.y },
@@ -272,8 +248,16 @@ fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
             height: screen_height() - 0.,
         };
 
+        let mouse = mouse_position();
+        let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
+        let color = if point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line, 0.2){
+            RED
+        } else {
+            path_line.color
+        };
+
         if point_on_screen(&coords1) || point_on_screen(&coords2) || line_intersects_rectangle(&line_line, &screen_rectangle) {
-            draw_line(coords1.x, coords1.y, coords2.x, coords2.y, 5.0, line.color);
+            draw_line(coords1.x, coords1.y, coords2.x, coords2.y, 5.0, color);
         }
         
     }
@@ -359,8 +343,17 @@ fn line_intersects_rectangle(line: &Line, rectangle: &Rectangle) -> bool {
     left || right || bottom || top
 }
 
-fn distance_between_points(point1: Point, point2: Point) -> f32 {
+fn distance_between_points(point1: &Point, point2: &Point) -> f32 {
     ((point1.x - point2.x).abs().powf(2.) + (point1.y - point2.y).abs().powf(2.)).sqrt()
+}
+
+fn point_on_line(point: &Point, line: &Line, buffer: f32) -> bool {
+    let line_len = distance_between_points(&line.point1, &line.point2);
+
+    let d1: f32 = distance_between_points(&point, &line.point1);
+    let d2: f32 = distance_between_points(&point, &line.point2);
+
+    d1+d2 >= line_len-buffer && d1+d2 <= line_len+buffer
 }
 
 struct Point{
@@ -374,8 +367,7 @@ struct Line {
 }
 
 struct PathLine {
-    point1: Point,
-    point2: Point,
+    line: Line,
     color: Color,
 }
 
@@ -436,7 +428,6 @@ async fn main() {
         Arc::new(Mutex::new(HashMap::new()));
 
     use futures::executor::LocalPool;
-    use futures::future::{pending, ready};
     use futures::task::LocalSpawnExt;
 
     let mut pool = LocalPool::new();
