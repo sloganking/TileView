@@ -81,24 +81,30 @@ async fn get_textures_for_zoom_level(
     sector_to_texture
 }
 
-fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> Point {
     let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
     let out_y = screen_height() / 2. + ((camera.y_offset + y) * camera.zoom_multiplier);
-    (out_x, out_y)
+    Point{
+        x: out_x,
+        y: out_y
+    }
 }
 
-fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> Point {
     let x_out = -camera.x_offset + (x as f32 - screen_width() / 2.) / camera.zoom_multiplier;
     let y_out = -camera.y_offset + (y as f32 - screen_height() / 2.) / camera.zoom_multiplier;
-    (x_out, y_out)
+    Point{
+        x: x_out,
+        y: y_out,
+    }
 }
 
-// struct Rectangle {
-//     x: f32,
-//     y: f32,
-//     width: f32,
-//     height: f32,
-// }
+struct Rectangle {
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+}
 
 // fn value_in_range(value: f32, min: f32, max: f32) -> bool {
 //     (value >= min) && (value <= max)
@@ -133,18 +139,18 @@ fn sector_at_screen_pos(
 
     // get sector x
     let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
-    let screen_point_sector_x = if screen_point_coords.0 < 0.0 {
-        (screen_point_coords.0 / tile_world_x_size) as i32 - 1
+    let screen_point_sector_x = if screen_point_coords.x < 0. {
+        (screen_point_coords.x / tile_world_x_size) as i32 - 1
     } else {
-        (screen_point_coords.0 / tile_world_x_size) as i32
+        (screen_point_coords.x / tile_world_x_size) as i32
     };
 
     // get sector y
     let tile_world_y_size = tile_dimensions.1 as f32 * two.powf(lod as f32);
-    let screen_point_sector_y = if screen_point_coords.1 < 0.0 {
-        (screen_point_coords.1 / tile_world_y_size) as i32 - 1
+    let screen_point_sector_y = if screen_point_coords.y < 0.0 {
+        (screen_point_coords.y / tile_world_y_size) as i32 - 1
     } else {
-        (screen_point_coords.1 / tile_world_y_size) as i32
+        (screen_point_coords.y / tile_world_y_size) as i32
     };
 
     (screen_point_sector_x, screen_point_sector_y)
@@ -195,8 +201,8 @@ fn pathtype_to_color(pathtype: &str) -> Color{
     }
 }
 
-fn point_on_screen(point: (f32,f32)) -> bool {
-    !(point.0 < 0. || point.0 > screen_width() - 0. || point.1 < 0. || point.1 > screen_height() - 0.)
+fn point_on_screen(point: &Point) -> bool {
+    !(point.x < 0. || point.x > screen_width() - 0. || point.y < 0. || point.y > screen_height() - 0.)
 }
 
 fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersection>){
@@ -229,8 +235,8 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
                     };
 
                     path_lines.push(PathLine{
-                        point1: (nodes[node]["x"].as_f64().unwrap() as f32, nodes[node]["z"].as_f64().unwrap() as f32),
-                        point2: (nodes[neighbor]["x"].as_f64().unwrap() as f32, nodes[neighbor]["z"].as_f64().unwrap() as f32),
+                        point1: Point { x: nodes[node]["x"].as_f64().unwrap() as f32, y: nodes[node]["z"].as_f64().unwrap() as f32 },
+                        point2: Point { x: nodes[neighbor]["x"].as_f64().unwrap() as f32, y: nodes[neighbor]["z"].as_f64().unwrap() as f32 },
                         color: pathtype_to_color(path_type),
                     });
                 }
@@ -239,7 +245,7 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
                
                 
                 intersections.push(Intersection{
-                    point:  (nodes[node]["x"].as_f64().unwrap() as f32, nodes[node]["z"].as_f64().unwrap() as f32),
+                    point:  Point { x: nodes[node]["x"].as_f64().unwrap() as f32, y: nodes[node]["z"].as_f64().unwrap() as f32 },
                     color: pathtype_to_color(nodes[node]["pathType"].as_str().unwrap()),
                 });
             }
@@ -251,11 +257,25 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
 
 fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
     for line in path_lines{
-        let coords1 = coord_to_screen_pos(line.point1.0 + 0.5, line.point1.1 + 0.5, &camera);
-        let coords2 = coord_to_screen_pos(line.point2.0 + 0.5, line.point2.1 + 0.5, &camera);
+        let coords1 = coord_to_screen_pos(line.point1.x + 0.5, line.point1.y + 0.5, &camera);
+        let coords2 = coord_to_screen_pos(line.point2.x + 0.5, line.point2.y + 0.5, &camera);
 
-        if point_on_screen(coords1) || point_on_screen(coords2){
-            draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 5.0, line.color);
+        let line_line = Line{
+            point1: Point { x: coords1.x, y: coords1.y },
+            point2: Point { x: coords2.x, y: coords2.y },
+        };
+
+        let screen_rectangle = Rectangle{
+            x: 100.,
+            y: 100.,
+            width: screen_width() - 200.,
+            height: screen_height() - 200.,
+        };
+
+        // || line_intersects_rectangle(&line_line, &screen_rectangle)
+
+        if point_on_screen(&coords1) || point_on_screen(&coords2) {
+            draw_line(coords1.x, coords1.y, coords2.x, coords2.y, 5.0, line.color);
         }
         
     }
@@ -263,21 +283,94 @@ fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
 
 fn render_intersections(intersections: &[Intersection], camera: &CameraSettings){
     for intersection in intersections{
-        let intersection_coords = coord_to_screen_pos(intersection.point.0 + 0.5, intersection.point.1 + 0.5, &camera);
-        if point_on_screen(intersection_coords){
-            draw_circle(intersection_coords.0, intersection_coords.1, 8.0, intersection.color);
+        let intersection_coords = coord_to_screen_pos(intersection.point.x + 0.5, intersection.point.y + 0.5, &camera);
+        if point_on_screen(&intersection_coords){
+            draw_circle(intersection_coords.x, intersection_coords.y, 8.0, intersection.color);
         }
     }
 }
 
+fn lines_intersect(line1: &Line, line2: &Line) -> bool {
+    // let uA: f32 = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
+    // let uB: f32 = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
+
+    let u_a: f32 = ((line1.point2.x-line2.point1.x)*(line1.point1.y-line2.point1.y) - (line1.point2.y-line2.point1.y)*(line1.point1.x-line2.point1.x)) / ((line1.point2.y-line2.point1.y)*(line1.point2.x-line1.point1.x) - (line1.point2.x-line2.point1.x)*(line1.point2.y-line1.point1.y));
+    let u_b: f32 = ((line1.point2.x-line1.point1.x)*(line1.point1.y-line2.point1.y) - (line1.point2.y-line1.point1.y)*(line1.point1.x-line2.point1.x)) / ((line1.point2.y-line2.point1.y)*(line1.point2.x-line1.point1.x) - (line1.point2.x-line2.point1.x)*(line1.point2.y-line1.point1.y));
+
+    u_a >= 0.0 && u_a <= 1.0 && u_b >= 0.0 && u_b <= 1.0
+}
+
+fn line_intersects_rectangle(line: &Line, rectangle: &Rectangle) -> bool {
+    let top_line = Line{
+        point1: Point{
+            x: rectangle.x,
+            y: rectangle.y,
+        },
+        point2: Point{
+            x: rectangle.x + rectangle.width,
+            y: rectangle.y,
+        },
+    };
+
+    let left_line = Line{
+        point1: Point{
+            x: rectangle.x,
+            y: rectangle.y,
+        },
+        point2: Point{
+            x: rectangle.x,
+            y: rectangle.y + rectangle.height,
+        },
+    };
+
+    let bottom_line = Line{
+        point1: Point{
+            x: rectangle.x,
+            y: rectangle.y + rectangle.height,
+        },
+        point2: Point{
+            x: rectangle.x + rectangle.width,
+            y: rectangle.y + rectangle.height,
+        },
+    };
+
+    let right_line = Line{
+        point1: Point{
+            x: rectangle.x + rectangle.width,
+            y: rectangle.y,
+        },
+        point2: Point{
+            x: rectangle.x + rectangle.width,
+            y: rectangle.y + rectangle.height,
+        },
+    };
+
+    let left = lines_intersect(&left_line, line);
+    let right = lines_intersect(&right_line, line);
+    let bottom = lines_intersect(&bottom_line, line);
+    let top = lines_intersect(&top_line, line);
+
+    left || right || bottom || top
+}
+
+struct Point{
+    x: f32,
+    y: f32,
+}
+
+struct Line {
+    point1: Point,
+    point2: Point,
+}
+
 struct PathLine {
-    point1: (f32,f32),
-    point2: (f32,f32),
+    point1: Point,
+    point2: Point,
     color: Color,
 }
 
 struct Intersection{
-    point: (f32,f32),
+    point: Point,
     color: Color,
 }
 
@@ -410,8 +503,8 @@ async fn main() {
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
-                camera.x_offset = -mouse_world_pos.0;
-                camera.y_offset = -mouse_world_pos.1;
+                camera.x_offset = -mouse_world_pos.x;
+                camera.y_offset = -mouse_world_pos.y;
 
                 let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
                 let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
@@ -432,8 +525,8 @@ async fn main() {
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
-                camera.x_offset = -mouse_world_pos.0;
-                camera.y_offset = -mouse_world_pos.1;
+                camera.x_offset = -mouse_world_pos.x;
+                camera.y_offset = -mouse_world_pos.y;
 
                 let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
                 let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
@@ -509,8 +602,8 @@ async fn main() {
             let mut rendered_tiles = 0;
 
             // for all sectors to render
-            for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            for sector_y in top_left_sector.1+1..=bottom_right_sector.1-1 {
+                for sector_x in top_left_sector.0+1..=bottom_right_sector.0-1 {
                     // determine texture
                     let texture_option = {
                         let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
@@ -555,7 +648,7 @@ async fn main() {
                         let tile_world_x = tile_world_width * sector_x as f32;
                         let tile_world_y = tile_world_height * sector_y as f32;
 
-                        let (tile_screen_x, tile_screen_y) =
+                        let tile_screen_point =
                             coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
 
                         let params = DrawTextureParams {
@@ -567,7 +660,7 @@ async fn main() {
                             pivot: None,
                         };
 
-                        draw_texture_ex(texture, tile_screen_x, tile_screen_y, WHITE, params);
+                        draw_texture_ex(texture, tile_screen_point.x, tile_screen_point.y, WHITE, params);
                         rendered_tiles += 1;
                     }
                 }
@@ -664,7 +757,7 @@ async fn main() {
         let mouse = mouse_position();
         let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
         draw_text(
-            &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
+            &("mouse.x: ".to_owned() + &mouse_coord.x.to_string()),
             20.0,
             100.0,
             30.0,
@@ -672,7 +765,7 @@ async fn main() {
         );
 
         draw_text(
-            &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
+            &("mouse.y: ".to_owned() + &mouse_coord.y.to_string()),
             20.0,
             120.0,
             30.0,
