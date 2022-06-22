@@ -2,7 +2,7 @@ use glob::{glob, GlobError};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, fs::File, io::Read,
 };
 
 use macroquad::prelude::*;
@@ -51,7 +51,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 }
 
 
-const TILE_DIR: &str = "./tile_images/moon/";
+const TILE_DIR: &str = "./tile_images/terrain/";
 
 async fn get_textures_for_zoom_level(
     level: u32,
@@ -185,6 +185,102 @@ async fn cache_texture(
     drop(retrieving_tile_map);
 }
 
+fn pathtype_to_color(pathtype: &str) -> Color{
+    match pathtype {
+        "iceroad" => BLUE,
+        "roofless iceroad" => SKYBLUE,
+        "rail" => GRAY,
+        "normal" => GREEN,
+        _ => GREEN,
+    }
+}
+
+fn point_on_screen(point: (f32,f32)) -> bool {
+    !(point.0 < 0. || point.0 > screen_width() - 0. || point.1 < 0. || point.1 > screen_height() - 0.)
+}
+
+fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersection>){
+
+    let mut path_lines = Vec::new();
+    let mut intersections = Vec::new();
+
+    let nodes = path_data.as_object().unwrap();
+    let mut already_rendered: HashMap<String, bool> = HashMap::new();
+
+    // for every existing
+    for (node, node_value) in nodes{
+        // println!("node: {}",node);
+        if let Some(neighbors) = node_value["connections"].as_object(){
+            for (neighbor, _) in neighbors {
+
+                // if line not already rendered
+                if already_rendered.get(&(neighbor.to_owned() + node)) == None{
+
+                    // mark line as rendered
+                    already_rendered.insert(node.to_owned() + neighbor, true);
+
+                    let node_pathtype = nodes[node]["pathType"].as_str().unwrap();
+                    let neighbor_pathtype = nodes[neighbor]["pathType"].as_str().unwrap();
+
+                    let path_type = if node_pathtype == neighbor_pathtype{
+                        node_pathtype
+                    } else{
+                        "normal"
+                    };
+
+                    path_lines.push(PathLine{
+                        point1: (nodes[node]["x"].as_f64().unwrap() as f32, nodes[node]["z"].as_f64().unwrap() as f32),
+                        point2: (nodes[neighbor]["x"].as_f64().unwrap() as f32, nodes[neighbor]["z"].as_f64().unwrap() as f32),
+                        color: pathtype_to_color(path_type),
+                    });
+                }
+            }
+            if neighbors.len() > 2{
+               
+                
+                intersections.push(Intersection{
+                    point:  (nodes[node]["x"].as_f64().unwrap() as f32, nodes[node]["z"].as_f64().unwrap() as f32),
+                    color: pathtype_to_color(nodes[node]["pathType"].as_str().unwrap()),
+                });
+            }
+        }
+    }
+
+    (path_lines, intersections)
+}
+
+fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
+    for line in path_lines{
+        let coords1 = coord_to_screen_pos(line.point1.0 + 0.5, line.point1.1 + 0.5, &camera);
+        let coords2 = coord_to_screen_pos(line.point2.0 + 0.5, line.point2.1 + 0.5, &camera);
+
+        if point_on_screen(coords1) || point_on_screen(coords2){
+            draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 5.0, line.color);
+        }
+        
+    }
+}
+
+fn render_intersections(intersections: &[Intersection], camera: &CameraSettings){
+    for intersection in intersections{
+        let intersection_coords = coord_to_screen_pos(intersection.point.0 + 0.5, intersection.point.1 + 0.5, &camera);
+        if point_on_screen(intersection_coords){
+            draw_circle(intersection_coords.0, intersection_coords.1, 8.0, intersection.color);
+        }
+    }
+}
+
+struct PathLine {
+    point1: (f32,f32),
+    point2: (f32,f32),
+    color: Color,
+}
+
+struct Intersection{
+    point: (f32,f32),
+    color: Color,
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -242,6 +338,14 @@ async fn main() {
 
     let mut pool = LocalPool::new();
     let spawner = pool.spawner();
+
+    // retrieve paths from json
+    let mut file = File::open("./paths/nodes.json").expect("Failed to open file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("Failed to read to string");
+    let path_data: serde_json::Value = serde_json::from_str(&contents).expect("JSON was not well-formatted");
+
+    let (path_lines, intersections) = get_path_lines(&path_data);
 
     loop {
         clear_background(GRAY);
@@ -521,6 +625,9 @@ async fn main() {
             //     }
             // }
         //<
+
+        render_lines(&path_lines, &camera);
+        render_intersections(&intersections, &camera);
 
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
