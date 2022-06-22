@@ -359,6 +359,10 @@ fn line_intersects_rectangle(line: &Line, rectangle: &Rectangle) -> bool {
     left || right || bottom || top
 }
 
+fn distance_between_points(point1: Point, point2: Point) -> f32 {
+    ((point1.x - point2.x).abs().powf(2.) + (point1.y - point2.y).abs().powf(2.)).sqrt()
+}
+
 struct Point{
     x: f32,
     y: f32,
