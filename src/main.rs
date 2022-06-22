@@ -173,10 +173,12 @@ fn pathtype_to_color(pathtype: &str) -> Color{
     }
 }
 
+/// Determins if screen point is currently on the screen
 fn point_on_screen(point: &Point) -> bool {
     !(point.x < 0. || point.x > screen_width() - 0. || point.y < 0. || point.y > screen_height() - 0.)
 }
 
+/// Extracts lines from json path data for easier rendering
 fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersection>){
 
     let mut path_lines = Vec::new();
@@ -250,7 +252,13 @@ fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
 
         let mouse = mouse_position();
         let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
-        let color = if point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line, 0.2){
+        let color = if point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line, 10.){
+
+            if let Some(closest_point) = closest_point_on_line_strict(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line){
+                let intersection_coords = coord_to_screen_pos(closest_point.x + 0.5, closest_point.y + 0.5, &camera);
+                draw_circle(intersection_coords.x, intersection_coords.y, 10.0, RED);
+            }
+
             RED
         } else {
             path_line.color
@@ -272,6 +280,7 @@ fn render_intersections(intersections: &[Intersection], camera: &CameraSettings)
     }
 }
 
+/// Returns true when two line segments intersect eachother
 fn lines_intersect(line1: &Line, line2: &Line) -> bool {
 
     let x1 = line1.point1.x;
@@ -290,6 +299,7 @@ fn lines_intersect(line1: &Line, line2: &Line) -> bool {
     u_a >= 0.0 && u_a <= 1.0 && u_b >= 0.0 && u_b <= 1.0
 }
 
+/// Tells if a line segment intersects a rectangle. Does not return true if line is inside rectangle but not intersecting it's sides.
 fn line_intersects_rectangle(line: &Line, rectangle: &Rectangle) -> bool {
     let top_line = Line{
         point1: Point{
@@ -343,10 +353,12 @@ fn line_intersects_rectangle(line: &Line, rectangle: &Rectangle) -> bool {
     left || right || bottom || top
 }
 
+/// Determins distance between two 2d points
 fn distance_between_points(point1: &Point, point2: &Point) -> f32 {
     ((point1.x - point2.x).abs().powf(2.) + (point1.y - point2.y).abs().powf(2.)).sqrt()
 }
 
+/// Determins if point is on line. Increase `buffer` will increase the distance considered a detection.
 fn point_on_line(point: &Point, line: &Line, buffer: f32) -> bool {
     let line_len = distance_between_points(&line.point1, &line.point2);
 
@@ -356,11 +368,30 @@ fn point_on_line(point: &Point, line: &Line, buffer: f32) -> bool {
     d1+d2 >= line_len-buffer && d1+d2 <= line_len+buffer
 }
 
+
+/// returns closest point on line semgent, if the closest point, were the line infinite and not a segment, is on the line segment.
+fn closest_point_on_line_strict(point: &Point, line: &Line) -> Option<Point> {
+    let line_len = distance_between_points(&line.point1, &line.point2);
+
+    let dot: f32 = ( ((point.x-line.point1.x)*(line.point2.x-line.point1.x)) + ((point.y-line.point1.y)*(line.point2.y-line.point1.y)) ) / line_len.powf(2.);
+
+    let closest_x: f32 = line.point1.x + (dot * (line.point2.x-line.point1.x));
+    let closest_y: f32 = line.point1.y + (dot * (line.point2.y-line.point1.y));
+
+    if point_on_line(&Point{x: closest_x, y: closest_y}, line, 0.1){
+        Some(Point{x: closest_x, y: closest_y})
+    } else {
+        None
+    }
+}
+
+// A 2d point
 struct Point{
     x: f32,
     y: f32,
 }
 
+// A 2d line segment
 struct Line {
     point1: Point,
     point2: Point,
