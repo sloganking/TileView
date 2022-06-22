@@ -266,15 +266,13 @@ fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
         };
 
         let screen_rectangle = Rectangle{
-            x: 100.,
-            y: 100.,
-            width: screen_width() - 200.,
-            height: screen_height() - 200.,
+            x: 0.,
+            y: 0.,
+            width: screen_width() - 0.,
+            height: screen_height() - 0.,
         };
 
-        // || line_intersects_rectangle(&line_line, &screen_rectangle)
-
-        if point_on_screen(&coords1) || point_on_screen(&coords2) {
+        if point_on_screen(&coords1) || point_on_screen(&coords2) || line_intersects_rectangle(&line_line, &screen_rectangle) {
             draw_line(coords1.x, coords1.y, coords2.x, coords2.y, 5.0, line.color);
         }
         
@@ -291,11 +289,19 @@ fn render_intersections(intersections: &[Intersection], camera: &CameraSettings)
 }
 
 fn lines_intersect(line1: &Line, line2: &Line) -> bool {
-    // let uA: f32 = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
-    // let uB: f32 = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
 
-    let u_a: f32 = ((line1.point2.x-line2.point1.x)*(line1.point1.y-line2.point1.y) - (line1.point2.y-line2.point1.y)*(line1.point1.x-line2.point1.x)) / ((line1.point2.y-line2.point1.y)*(line1.point2.x-line1.point1.x) - (line1.point2.x-line2.point1.x)*(line1.point2.y-line1.point1.y));
-    let u_b: f32 = ((line1.point2.x-line1.point1.x)*(line1.point1.y-line2.point1.y) - (line1.point2.y-line1.point1.y)*(line1.point1.x-line2.point1.x)) / ((line1.point2.y-line2.point1.y)*(line1.point2.x-line1.point1.x) - (line1.point2.x-line2.point1.x)*(line1.point2.y-line1.point1.y));
+    let x1 = line1.point1.x;
+    let x2 = line1.point2.x;
+    let x3 = line2.point1.x;
+    let x4 = line2.point2.x;
+
+    let y1 = line1.point1.y;
+    let y2 = line1.point2.y;
+    let y3 = line2.point1.y;
+    let y4 = line2.point2.y;
+
+    let u_a: f32 = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
+    let u_b: f32 = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / ((y4-y3)*(x2-x1) - (x4-x3)*(y2-y1));
 
     u_a >= 0.0 && u_a <= 1.0 && u_b >= 0.0 && u_b <= 1.0
 }
@@ -602,8 +608,8 @@ async fn main() {
             let mut rendered_tiles = 0;
 
             // for all sectors to render
-            for sector_y in top_left_sector.1+1..=bottom_right_sector.1-1 {
-                for sector_x in top_left_sector.0+1..=bottom_right_sector.0-1 {
+            for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                     // determine texture
                     let texture_option = {
                         let arc_mutex_hdd_texture_cache2 = arc_mutex_hdd_texture_cache.clone();
