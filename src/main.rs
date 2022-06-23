@@ -1,3 +1,4 @@
+use futures::executor::LocalPool;
 use glob::{glob, GlobError};
 use std::{
     collections::HashMap,
@@ -184,6 +185,11 @@ struct CameraSettings {
     zoom_multiplier: f32,
 }
 
+struct PoolAndDetails {
+    pool: LocalPool,
+    tile_details: (i32, i32, usize),
+}
+
 #[macroquad::main("Map Renderer")]
 async fn main() {
     // get initial tile dimensions
@@ -225,8 +231,7 @@ async fn main() {
     let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
 
     // keeps track of which tiles are currently being retreived
-    let mut retrieving_tile_map: HashMap<(i32, i32, usize), bool> =
-        HashMap::new();
+    let mut retrieving_tile_map: HashMap<(i32, i32, usize), bool> = HashMap::new();
 
     use futures::executor::LocalPool;
     use futures::task::LocalSpawnExt;
@@ -235,6 +240,8 @@ async fn main() {
     let spawner = pool.spawner();
 
     let (results_tx, results_rx) = mpsc::channel();
+
+    let mut retriving_pools: HashMap<(i32, i32, usize), LocalPool> = HashMap::new();
 
     loop {
         clear_background(GRAY);
@@ -411,6 +418,16 @@ async fn main() {
                         {
                             to_remove.push((*sec_x, *sec_y, *sec_lod));
                         }
+                    }
+
+                    // remove tiles
+                    for (sec_x, sec_y, sec_lod) in to_remove {
+                        if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                            texture.delete();
+                        }
+                    }
+                }
+            //<
         //<> cache uncached textures
             // for all sectors to render
             // for sector_y in top_left_sector.1..=bottom_right_sector.1 {
@@ -429,38 +446,36 @@ async fn main() {
         //<> receive any retrieved tiles
             for (details, texture_option) in results_rx.try_iter() {
                 hdd_texture_cache.insert(details, texture_option);
-                retrieving_tile_map.remove(&details);
+                retriving_pools.remove(&details);
             }
         //<> cache desired textures
 
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-
                     // if tile not in cache
-                    if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)){
+                    if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
                         // if tile being retrived
-                        let tile_found = match retrieving_tile_map.get(&(sector_x, sector_y, lod)){
-                            Some(_) => true,
-                            None => false,
-                        };
+                        // let tile_found = match {
+                        //     Some(_) => true,
+                        //     None => false,
+                        // };
 
-                        if !tile_found {
-                                retrieving_tile_map.insert((sector_x, sector_y, lod), true);
+                        if let None = retriving_pools.get(&(sector_x, sector_y, lod)) {
+                            let f = cache_texture((sector_x, sector_y, lod), results_tx.clone());
 
-                            println!("form cache");
-                            let f = cache_texture(
-                                (sector_x, sector_y, lod),
-                                results_tx.clone(),
-                            );
+                            // spawner.spawn_local(f).unwrap();
 
+                            // create LocalPool with one task inside
+                            let pool = LocalPool::new();
+                            let spawner = pool.spawner();
                             spawner.spawn_local(f).unwrap();
+
+                            retriving_pools.insert((sector_x, sector_y, lod), pool);
                         }
                     }
                 }
             }
-
-        println!("retrieving_tile_map: {}", retrieving_tile_map.len());
 
         //<> draw all textures
 
@@ -516,51 +531,41 @@ async fn main() {
                 }
             }
 
-            pool.try_run_one();
+            // pool.try_run_one();
             // pool.run_until_stalled();
 
-        //<>  clean up any unrendered textures
+        //<> try run one retriving_pools
 
-            //> remove tiles out of view
+            // stop retrieving any tiles that are not current desired lod
+            retriving_pools.retain(|(tile_x, tile_y, tile_lod), _| {
+                if !(*tile_lod == lod) {
+                    println!("retain");
+                }
+                *tile_lod == lod
+            });
 
-            //<> determine if current desired view is fully rendered
-                let mut fully_rendered = true;
-                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                        // render texture
-                        if hdd_texture_cache.get(&(sector_x, sector_y, lod)) == None {
-                            fully_rendered = false;
-                            break;
-                        }
-                    }
-                    if !fully_rendered {
+            // possibly prepair one tile
+            let mut finished_tiles = Vec::new();
+            for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
+                if *tile_lod == lod {
+                    println!("tile_x {}", tile_x);
+                    println!("tile_y {}", tile_y);
+                    println!("tile_lod {}", tile_lod);
+                    if pool.try_run_one() {
+                        println!("rendering complete");
+                        finished_tiles.push((*tile_x, *tile_y, *tile_lod));
                         break;
                     }
                 }
+            }
 
-            //<> possibly remove tiles in wrong lod
+            // remove finished tiles
+            for (tile_x, tile_y, tile_lod) in finished_tiles {
+                retriving_pools.remove(&(tile_x, tile_y, tile_lod));
+                println!("remove finished tiles");
+            }
 
-                // clear texture cache only if fully rendering what we want to be
-                if fully_rendered {
-                    // find tiles to remove
-                    let mut to_remove = Vec::new();
-                    for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
-                        if !((lod == *sec_lod)
-                            && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                            && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                        {
-                            to_remove.push((*sec_x, *sec_y, *sec_lod));
-                        }
-                    }
-
-                    // remove tiles
-                    for (sec_x, sec_y, sec_lod) in to_remove {
-                        if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                            texture.delete();
-                        }
-                    }
-                }
-            //<
+            println!("retriving_pools.len(): {}", retriving_pools.len());
 
         //<> draw tile lines
             // if true {
