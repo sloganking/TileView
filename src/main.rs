@@ -187,6 +187,39 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
     lod
 }
 
+/// determine if current desired view is fully rendered
+fn current_view_cached(hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>, render_lod: usize, camera: &CameraSettings, tile_dimensions: (f32,f32)) -> bool {
+    //> determine what sectors we need to render
+        //get top left sector to render
+        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
+
+        //get bottom right sector to render
+        let bottom_right_sector = sector_at_screen_pos(
+            screen_width(),
+            screen_height(),
+            &camera,
+            tile_dimensions,
+            render_lod,
+        );
+    //<
+
+    let mut fully_rendered = true;
+    for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+        for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            // render texture
+            if hdd_texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
+                fully_rendered = false;
+                break;
+            }
+        }
+        if !fully_rendered {
+            break;
+        }
+    }
+    
+    fully_rendered
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -386,19 +419,7 @@ async fn main() {
                 }
 
             //<> determine if current desired view is fully rendered
-                let mut fully_rendered = true;
-                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                        // render texture
-                        if hdd_texture_cache.get(&(sector_x, sector_y, lod)) == None {
-                            fully_rendered = false;
-                            break;
-                        }
-                    }
-                    if !fully_rendered {
-                        break;
-                    }
-                }
+                let fully_rendered = current_view_cached(&hdd_texture_cache, lod, &camera, tile_dimensions);
 
             //<> possibly remove tiles in wrong lod
 
