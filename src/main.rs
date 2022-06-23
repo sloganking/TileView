@@ -155,7 +155,6 @@ fn sector_at_screen_pos(
 /// stores texture in hdd_texture_cache. Does not check if it is already there.
 async fn cache_texture(
     tile_data: (i32, i32, usize),
-    mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>>,
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
@@ -177,11 +176,6 @@ async fn cache_texture(
     };
 
     results_tx.send((tile_data, texture_option)).unwrap();
-
-    // mark tile as no longer activly being retrieved
-    let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
-    retrieving_tile_map.remove(&tile_data);
-    drop(retrieving_tile_map);
 }
 
 struct CameraSettings {
@@ -231,8 +225,8 @@ async fn main() {
     let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
 
     // keeps track of which tiles are currently being retreived
-    let mutex_retrieving_tile_map: Arc<Mutex<HashMap<(i32, i32, usize), bool>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let mut retrieving_tile_map: HashMap<(i32, i32, usize), bool> =
+        HashMap::new();
 
     use futures::executor::LocalPool;
     use futures::task::LocalSpawnExt;
@@ -399,37 +393,41 @@ async fn main() {
             //         // pool.run();
             //     }
             // }
+        //<> receive any retrieved tiles
+            for (details, texture_option) in results_rx.try_iter() {
+                hdd_texture_cache.insert(details, texture_option);
+                retrieving_tile_map.remove(&details);
+            }
         //<> cache desired textures
 
             // for all sectors to render
             for sector_y in top_left_sector.1..=bottom_right_sector.1 {
                 for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    // determine texture
-                    match hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
-                        None => {
-                            let mut retrieving_tile_map = mutex_retrieving_tile_map.lock().unwrap();
-                            if retrieving_tile_map.get(&(sector_x, sector_y, lod)) == None {
+
+                    // if tile not in cache
+                    if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)){
+                        // if tile being retrived
+                        let tile_found = match retrieving_tile_map.get(&(sector_x, sector_y, lod)){
+                            Some(_) => true,
+                            None => false,
+                        };
+
+                        if !tile_found {
                                 retrieving_tile_map.insert((sector_x, sector_y, lod), true);
-                                drop(retrieving_tile_map);
 
-                                let f = cache_texture(
-                                    (sector_x, sector_y, lod),
-                                    mutex_retrieving_tile_map.clone(),
-                                    results_tx.clone(),
-                                );
+                            println!("form cache");
+                            let f = cache_texture(
+                                (sector_x, sector_y, lod),
+                                results_tx.clone(),
+                            );
 
-                                spawner.spawn_local(f).unwrap();
-                            }
+                            spawner.spawn_local(f).unwrap();
                         }
-                        _ => {}
-                    };
+                    }
                 }
             }
 
-        //<> receive any retrieved tiles
-            for (details, texture_option) in results_rx.try_iter() {
-                hdd_texture_cache.insert(details, texture_option);
-            }
+        println!("retrieving_tile_map: {}", retrieving_tile_map.len());
 
         //<> draw all textures
 
