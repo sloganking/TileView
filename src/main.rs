@@ -187,7 +187,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
     lod
 }
 
-/// determine if current desired view is fully rendered
+/// determine if current desired view is fully cached and ready to be rendered
 fn current_view_cached(
     hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
     render_lod: usize,
@@ -223,6 +223,76 @@ fn current_view_cached(
     }
 
     fully_rendered
+}
+
+/// renders image tiles and returns how many are currently being rendered
+fn render_screen_tiles(
+    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
+    tile_dimensions: (f32, f32),
+    camera: &CameraSettings,
+    max_lod: usize,
+) -> u32 {
+    let mut num_rendered_tiles: u32 = 0;
+    let two: f32 = 2.0;
+
+    for render_lod in (0..=max_lod).rev() {
+        //> determine what sectors we need to render
+            //get top left sector to render
+            let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
+
+            //get bottom right sector to render
+            let bottom_right_sector = sector_at_screen_pos(
+                screen_width(),
+                screen_height(),
+                &camera,
+                tile_dimensions,
+                render_lod,
+            );
+        //<
+
+        // for all cached tiles
+        for ((tile_x, tile_y, tile_lod), texture_option) in hdd_texture_cache {
+            // if correct LOD
+            if *tile_lod == render_lod {
+                // if tile on screen
+                if *tile_x >= top_left_sector.0
+                    && *tile_y >= top_left_sector.1
+                    && *tile_x <= bottom_right_sector.0
+                    && *tile_y <= bottom_right_sector.1
+                {
+                    // if there's a texture to be rendered
+                    if let Some(texture) = texture_option {
+                        let tile_world_width =
+                            tile_dimensions.0 as f32 * two.powf(render_lod as f32);
+                        let tile_world_height =
+                            tile_dimensions.1 as f32 * two.powf(render_lod as f32);
+
+                        let tile_screen_width = tile_world_width * camera.zoom_multiplier;
+                        let tile_screen_height = tile_world_height * camera.zoom_multiplier;
+
+                        let tile_world_x = tile_world_width * *tile_x as f32;
+                        let tile_world_y = tile_world_height * *tile_y as f32;
+
+                        let (tile_screen_x, tile_screen_y) =
+                            coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
+
+                        let params = DrawTextureParams {
+                            dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
+                            source: None,
+                            rotation: 0.,
+                            flip_x: false,
+                            flip_y: false,
+                            pivot: None,
+                        };
+
+                        draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+                        num_rendered_tiles += 1;
+                    }
+                }
+            }
+        }
+    }
+    num_rendered_tiles
 }
 
 struct CameraSettings {
@@ -485,69 +555,8 @@ async fn main() {
 
         //<> draw all textures
 
-            let mut rendered_tiles = 0;
-
-            for render_lod in (0..=max_lod).rev() {
-                //> determine what sectors we need to render
-                    //get top left sector to render
-                    let top_left_sector =
-                        sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
-
-                    //get bottom right sector to render
-                    let bottom_right_sector = sector_at_screen_pos(
-                        screen_width(),
-                        screen_height(),
-                        &camera,
-                        tile_dimensions,
-                        render_lod,
-                    );
-                //<
-
-                // for all cached tiles
-                for ((tile_x, tile_y, tile_lod), texture_option) in &hdd_texture_cache {
-                    // if correct LOD
-                    if *tile_lod == render_lod {
-                        // if tile on screen
-                        if *tile_x >= top_left_sector.0
-                            && *tile_y >= top_left_sector.1
-                            && *tile_x <= bottom_right_sector.0
-                            && *tile_y <= bottom_right_sector.1
-                        {
-                            // if there's a texture to be rendered
-                            if let Some(texture) = texture_option {
-                                let tile_world_width =
-                                    tile_dimensions.0 as f32 * two.powf(render_lod as f32);
-                                let tile_world_height =
-                                    tile_dimensions.1 as f32 * two.powf(render_lod as f32);
-
-                                let tile_screen_width = tile_world_width * camera.zoom_multiplier;
-                                let tile_screen_height = tile_world_height * camera.zoom_multiplier;
-
-                                let tile_world_x = tile_world_width * *tile_x as f32;
-                                let tile_world_y = tile_world_height * *tile_y as f32;
-
-                                let (tile_screen_x, tile_screen_y) =
-                                    coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
-
-                                let params = DrawTextureParams {
-                                    dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
-                                    source: None,
-                                    rotation: 0.,
-                                    flip_x: false,
-                                    flip_y: false,
-                                    pivot: None,
-                                };
-
-                                draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
-                                rendered_tiles += 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // pool.try_run_one();
-            // pool.run_until_stalled();
+            let num_rendered_tiles =
+                render_screen_tiles(&hdd_texture_cache, tile_dimensions, &camera, max_lod);
 
         //<> try run one retriving_pools
 
@@ -624,7 +633,7 @@ async fn main() {
         );
 
         draw_text(
-            &("rendered_tiles: ".to_owned() + &rendered_tiles.to_string()),
+            &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
             20.0,
             80.0,
             30.0,
