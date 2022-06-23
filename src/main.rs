@@ -373,7 +373,7 @@ async fn main() {
 
                 let mut to_remove = Vec::new();
                 for (tile_data, _) in &hdd_texture_cache {
-                    if !tile_on_screen(*tile_data, &camera, tile_dimensions) {
+                    if !tile_on_screen(*tile_data, &camera, tile_dimensions) && tile_data.2 != max_lod {
                         to_remove.push(*tile_data);
                     }
                 }
@@ -411,7 +411,9 @@ async fn main() {
                             && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
                             && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
                         {
-                            to_remove.push((*sec_x, *sec_y, *sec_lod));
+                            if *sec_lod != max_lod{
+                                to_remove.push((*sec_x, *sec_y, *sec_lod));
+                            }   
                         }
                     }
 
@@ -526,7 +528,7 @@ async fn main() {
         //<> try run one retriving_pools
 
             // stop retrieving any tiles that are not current desired lod
-            retriving_pools.retain(|(_, _, tile_lod), _| *tile_lod == lod);
+            retriving_pools.retain(|(_, _, tile_lod), _| *tile_lod == lod || *tile_lod == max_lod);
 
             // possibly prepair one tile
             let mut finished_tiles = Vec::new();
