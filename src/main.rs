@@ -147,6 +147,46 @@ async fn cache_texture(
     results_tx.send((tile_data, texture_option)).unwrap();
 }
 
+fn tile_on_screen(
+    tile_data: (i32, i32, usize),
+    camera: &CameraSettings,
+    tile_dimensions: (f32, f32),
+) -> bool {
+    let (tile_x, tile_y, render_lod) = tile_data;
+    //> determine what sectors we need to render
+        //get top left sector to render
+        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
+
+        //get bottom right sector to render
+        let bottom_right_sector = sector_at_screen_pos(
+            screen_width(),
+            screen_height(),
+            &camera,
+            tile_dimensions,
+            render_lod,
+        );
+    //<
+
+    // if tile on screen
+    tile_x >= top_left_sector.0
+        && tile_y >= top_left_sector.1
+        && tile_x <= bottom_right_sector.0
+        && tile_y <= bottom_right_sector.1
+}
+
+fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
+    let two: f32 = 2.0;
+    let mut lod: usize = 0;
+    for level in 0..=max_lod {
+        if zoom_multiplier < 1. / two.powf(level as f32) {
+            lod = level as usize;
+        } else {
+            break;
+        }
+    }
+    lod
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -163,14 +203,10 @@ async fn main() {
     tile_dimensions.1 = initial_texture.height();
     // initial_texture.delete();
 
-    // load texture cache
+    // get max_lod
     let mut max_lod: usize = 0;
-    // let mut texture_cache: Vec<HashMap<(i32, i32), Texture2D>> = Vec::new();
     for x in 0.. {
         if PathBuf::from(TILE_DIR.to_owned() + &x.to_string()).is_dir() {
-            // texture_cache.push(
-            //     get_textures_for_zoom_level(x.try_into().unwrap(), TILE_DIR, tile_dimensions).await,
-            // );
             max_lod = x;
         } else {
             break;
@@ -317,25 +353,13 @@ async fn main() {
                 mouse_clicked_in_position = None;
             }
 
-        //<> get LOD
+        //<
 
-            let two: f32 = 2.0;
-            let mut lod: usize = 0;
-            for level in 0..=max_lod {
-                if camera.zoom_multiplier < 1. / two.powf(level as f32) {
-                    lod = level as usize;
-                } else {
-                    break;
-                }
-            }
-            // re-make immutable
-            let lod = lod;
+        let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
 
-        //<> determine what sectors we need to render
-            // get top left sector to render
+        //> determine what sectors we need to render
             let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
 
-            //get bottom right sector to render
             let bottom_right_sector = sector_at_screen_pos(
                 screen_width(),
                 screen_height(),
@@ -346,6 +370,20 @@ async fn main() {
         //<>  clean up any unrendered textures
 
             //> remove tiles out of view
+
+                let mut to_remove = Vec::new();
+                for (tile_data, _) in &hdd_texture_cache {
+                    if !tile_on_screen(*tile_data, &camera, tile_dimensions) {
+                        to_remove.push(*tile_data);
+                    }
+                }
+
+                // remove tiles
+                for (sec_x, sec_y, sec_lod) in to_remove {
+                    if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                        texture.delete();
+                    }
+                }
 
             //<> determine if current desired view is fully rendered
                 let mut fully_rendered = true;
@@ -385,21 +423,6 @@ async fn main() {
                     }
                 }
             //<
-        //<> cache uncached textures
-            // for all sectors to render
-            // for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-            //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-
-            //         // // futures::run(fut);
-
-            //         // use futures::executor::LocalPool;
-
-            //         // let mut pool = LocalPool::new();
-
-            //         // pool.spawn_local()
-            //         // pool.run();
-            //     }
-            // }
         //<> receive any retrieved tiles
             for (details, texture_option) in results_rx.try_iter() {
                 hdd_texture_cache.insert(details, texture_option);
@@ -524,30 +547,30 @@ async fn main() {
             // println!("retriving_pools.len(): {}", retriving_pools.len());
 
         //<> draw tile lines
-            if true {
-                // for all sectors to render
-                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                    let tile_screen_y = screen_height() / 2.
-                        + (camera.y_offset * camera.zoom_multiplier)
-                        + sector_y as f32
-                            * tile_dimensions.1 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
+            // if true {
+            //     // for all sectors to render
+            //     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+            //         let tile_screen_y = screen_height() / 2.
+            //             + (camera.y_offset * camera.zoom_multiplier)
+            //             + sector_y as f32
+            //                 * tile_dimensions.1 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
 
-                    draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, RED);
-                }
+            //         draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, RED);
+            //     }
 
-                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    let tile_screen_x = screen_width() / 2.
-                        + (camera.x_offset * camera.zoom_multiplier)
-                        + sector_x as f32
-                            * tile_dimensions.0 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
+            //     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            //         let tile_screen_x = screen_width() / 2.
+            //             + (camera.x_offset * camera.zoom_multiplier)
+            //             + sector_x as f32
+            //                 * tile_dimensions.0 as f32
+            //                 * camera.zoom_multiplier
+            //                 * two.powf(lod as f32);
 
-                    draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, RED);
-                }
-            }
+            //         draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, RED);
+            //     }
+            // }
         //<
 
         draw_text(
