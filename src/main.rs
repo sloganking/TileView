@@ -188,7 +188,12 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
 }
 
 /// determine if current desired view is fully rendered
-fn current_view_cached(hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>, render_lod: usize, camera: &CameraSettings, tile_dimensions: (f32,f32)) -> bool {
+fn current_view_cached(
+    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
+    render_lod: usize,
+    camera: &CameraSettings,
+    tile_dimensions: (f32, f32),
+) -> bool {
     //> determine what sectors we need to render
         //get top left sector to render
         let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
@@ -216,7 +221,7 @@ fn current_view_cached(hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Tex
             break;
         }
     }
-    
+
     fully_rendered
 }
 
