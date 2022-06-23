@@ -234,6 +234,8 @@ fn get_path_lines(path_data: &serde_json::Value) -> (Vec<PathLine>, Vec<Intersec
 }
 
 fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
+    let mut min_dist = f32::MAX;
+    let mut closest_point = Point{x: 0., y: 0.};
     for path_line in path_lines{
         let coords1 = coord_to_screen_pos(path_line.line.point1.x + 0.5, path_line.line.point1.y + 0.5, &camera);
         let coords2 = coord_to_screen_pos(path_line.line.point2.x + 0.5, path_line.line.point2.y + 0.5, &camera);
@@ -254,21 +256,41 @@ fn render_lines(path_lines: &[PathLine], camera: &CameraSettings){
         let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
         let color = if point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line, 10.){
 
-            if let Some(closest_point) = closest_point_on_line_strict(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line){
-                let intersection_coords = coord_to_screen_pos(closest_point.x + 0.5, closest_point.y + 0.5, &camera);
-                draw_circle(intersection_coords.x, intersection_coords.y, 10.0, RED);
-            }
+            
 
             RED
         } else {
             path_line.color
         };
+        
+
+        // if let Some(closest_point) = closest_point_on_line_strict(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line){
+        //     let intersection_coords = coord_to_screen_pos(closest_point.x + 0.5, closest_point.y + 0.5, &camera);
+        //     draw_circle(intersection_coords.x, intersection_coords.y, 10.0, RED);
+        // }
+
+        // let closest_point = closest_point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line);
+        // let intersection_coords = coord_to_screen_pos(closest_point.x + 0.5, closest_point.y + 0.5, &camera);
+        // if point_on_screen(&intersection_coords){
+        //     draw_circle(intersection_coords.x, intersection_coords.y, 10.0, RED);
+        // }
+        
 
         if point_on_screen(&coords1) || point_on_screen(&coords2) || line_intersects_rectangle(&line_line, &screen_rectangle) {
             draw_line(coords1.x, coords1.y, coords2.x, coords2.y, 5.0, color);
+
+            let closest_point_on_line= closest_point_on_line(&Point{x: mouse_coord.x, y: mouse_coord.y}, &path_line.line);
+            let cur_dist = distance_between_points(&Point{x: mouse_coord.x, y: mouse_coord.y}, &closest_point_on_line);
+            if cur_dist < min_dist{
+                min_dist = cur_dist;
+                closest_point = closest_point_on_line;
+            }
         }
         
     }
+
+    let intersection_coords = coord_to_screen_pos(closest_point.x + 0.5, closest_point.y + 0.5, &camera);
+    draw_circle(intersection_coords.x, intersection_coords.y, 10.0, RED);
 }
 
 fn render_intersections(intersections: &[Intersection], camera: &CameraSettings){
@@ -385,6 +407,28 @@ fn closest_point_on_line_strict(point: &Point, line: &Line) -> Option<Point> {
     }
 }
 
+/// returns closest point on line semgent.
+fn closest_point_on_line(point: &Point, line: &Line) -> Point {
+    let line_len = distance_between_points(&line.point1, &line.point2);
+
+    let dot: f32 = ( ((point.x-line.point1.x)*(line.point2.x-line.point1.x)) + ((point.y-line.point1.y)*(line.point2.y-line.point1.y)) ) / line_len.powf(2.);
+
+    let closest_x: f32 = line.point1.x + (dot * (line.point2.x-line.point1.x));
+    let closest_y: f32 = line.point1.y + (dot * (line.point2.y-line.point1.y));
+
+    if point_on_line(&Point{x: closest_x, y: closest_y}, line, 0.1){
+        Point{x: closest_x, y: closest_y}
+    } else {
+        if distance_between_points(point, &line.point1) < distance_between_points(point, &line.point2){
+            line.point1.clone()
+        } else {
+            line.point2.clone()
+        }
+    }
+}
+
+
+#[derive(Clone)]
 // A 2d point
 struct Point{
     x: f32,
