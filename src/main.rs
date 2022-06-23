@@ -178,7 +178,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
     let two: f32 = 2.0;
     let mut lod: usize = 0;
     for level in 0..=max_lod {
-        if zoom_multiplier < 1. / two.powf(level as f32) {
+        if zoom_multiplier < 1.5 / two.powf(level as f32) {
             lod = level as usize;
         } else {
             break;
