@@ -366,6 +366,7 @@ async fn main() {
             }
             // re-make immutable
             let lod = lod;
+
         //<> determine what sectors we need to render
             //get top left sector to render
             let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
@@ -378,6 +379,38 @@ async fn main() {
                 tile_dimensions,
                 lod,
             );
+        //<>  clean up any unrendered textures
+
+            //> remove tiles out of view
+
+            //<> determine if current desired view is fully rendered
+                let mut fully_rendered = true;
+                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+                    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+                        // render texture
+                        if hdd_texture_cache.get(&(sector_x, sector_y, lod)) == None {
+                            fully_rendered = false;
+                            break;
+                        }
+                    }
+                    if !fully_rendered {
+                        break;
+                    }
+                }
+
+            //<> possibly remove tiles in wrong lod
+
+                // clear texture cache only if fully rendering what we want to be
+                if fully_rendered {
+                    // find tiles to remove
+                    let mut to_remove = Vec::new();
+                    for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
+                        if !((lod == *sec_lod)
+                            && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                            && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                        {
+                            to_remove.push((*sec_x, *sec_y, *sec_lod));
+                        }
         //<> cache uncached textures
             // for all sectors to render
             // for sector_y in top_left_sector.1..=bottom_right_sector.1 {
