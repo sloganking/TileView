@@ -51,6 +51,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 }
 
 const TILE_DIR: &str = "./tile_images/terrain/";
+const LOD_FUZZYNESS: f32 = 1.5;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
@@ -178,7 +179,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
     let two: f32 = 2.0;
     let mut lod: usize = 0;
     for level in 0..=max_lod {
-        if zoom_multiplier < 1.5 / two.powf(level as f32) {
+        if zoom_multiplier < LOD_FUZZYNESS / two.powf(level as f32) {
             lod = level as usize;
         } else {
             break;
@@ -460,7 +461,7 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed;
             }
 
-            let min_zoom = 1.0 / two.powf(max_lod as f32 + 1.0) as f32;
+            let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
             let max_zoom = 20.0;
 
             // limit the zoom
