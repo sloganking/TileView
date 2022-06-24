@@ -560,19 +560,21 @@ async fn main() {
 
             // possibly prepair one tile
             let mut finished_tiles = Vec::new();
-            for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
-                if *tile_lod == lod {
-                    if pool.try_run_one() {
-                        // don't break unless texture was sent back
-                        if let Ok((details, texture_option)) = results_rx.try_recv() {
-                            // mark for removal from retriving_pools
-                            finished_tiles.push((*tile_x, *tile_y, *tile_lod));
-
-                            // store in
-                            hdd_texture_cache.insert(details, texture_option);
-
-                            if let Some(_) = texture_option {
-                                break;
+            for _ in 0..2{
+                for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
+                    if *tile_lod == lod {
+                        if pool.try_run_one() {
+                            // don't break unless texture was sent back
+                            if let Ok((details, texture_option)) = results_rx.try_recv() {
+                                // mark for removal from retriving_pools
+                                finished_tiles.push((*tile_x, *tile_y, *tile_lod));
+    
+                                // store in
+                                hdd_texture_cache.insert(details, texture_option);
+    
+                                if let Some(_) = texture_option {
+                                    break;
+                                }
                             }
                         }
                     }
