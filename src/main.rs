@@ -295,6 +295,80 @@ fn render_screen_tiles(
     num_rendered_tiles
 }
 
+fn clean_tile_texture_cache(
+    hdd_texture_cache: &mut HashMap<(i32, i32, usize), Option<Texture2D>>,
+    tile_dimensions: (f32, f32),
+    camera: &CameraSettings,
+    lod: usize,
+) {
+    //> determine what sectors we need to render
+        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+
+        let bottom_right_sector = sector_at_screen_pos(
+            screen_width(),
+            screen_height(),
+            &camera,
+            tile_dimensions,
+            lod,
+        );
+    //<> remove tiles out of view
+
+        let mut to_remove = Vec::new();
+        for (tile_data, _) in hdd_texture_cache.iter() {
+            if !tile_on_screen(*tile_data, &camera, tile_dimensions) {
+                to_remove.push(*tile_data);
+            }
+        }
+
+        // remove tiles
+        for (sec_x, sec_y, sec_lod) in to_remove {
+            if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                texture.delete();
+            }
+        }
+
+    //<> determine if current desired view is fully rendered
+        let fully_rendered = current_view_cached(&hdd_texture_cache, lod, &camera, tile_dimensions);
+
+    //<> possibly remove tiles in wrong lod
+
+        // clear texture cache only if fully rendering what we want to be
+        if fully_rendered {
+            // find tiles to remove
+            let mut to_remove = Vec::new();
+            for ((sec_x, sec_y, sec_lod), _) in hdd_texture_cache.iter() {
+                if !((lod == *sec_lod)
+                    && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                    && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                {
+                    to_remove.push((*sec_x, *sec_y, *sec_lod));
+                }
+            }
+
+            // remove tiles
+            for (sec_x, sec_y, sec_lod) in to_remove {
+                if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                    texture.delete();
+                }
+            }
+        }
+    //<
+}
+
+fn get_screen_sectors(camera: &CameraSettings, tile_dimensions: (f32,f32), lod: usize) -> ((i32,i32), (i32,i32)){
+    let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+
+    let bottom_right_sector = sector_at_screen_pos(
+        screen_width(),
+        screen_height(),
+        &camera,
+        tile_dimensions,
+        lod,
+    );
+
+    (top_left_sector, bottom_right_sector)
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -465,60 +539,12 @@ async fn main() {
 
         let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
 
-        //> determine what sectors we need to render
-            let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+        // determine what sectors we need to render
+        let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
 
-            let bottom_right_sector = sector_at_screen_pos(
-                screen_width(),
-                screen_height(),
-                &camera,
-                tile_dimensions,
-                lod,
-            );
-        //<>  clean up any unrendered textures
+        //  clean up any unrendered textures
+        clean_tile_texture_cache(&mut &mut hdd_texture_cache, tile_dimensions, &camera, lod);
 
-            //> remove tiles out of view
-
-                let mut to_remove = Vec::new();
-                for (tile_data, _) in &hdd_texture_cache {
-                    if !tile_on_screen(*tile_data, &camera, tile_dimensions) {
-                        to_remove.push(*tile_data);
-                    }
-                }
-
-                // remove tiles
-                for (sec_x, sec_y, sec_lod) in to_remove {
-                    if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                        texture.delete();
-                    }
-                }
-
-            //<> determine if current desired view is fully rendered
-                let fully_rendered = current_view_cached(&hdd_texture_cache, lod, &camera, tile_dimensions);
-
-            //<> possibly remove tiles in wrong lod
-
-                // clear texture cache only if fully rendering what we want to be
-                if fully_rendered {
-                    // find tiles to remove
-                    let mut to_remove = Vec::new();
-                    for ((sec_x, sec_y, sec_lod), _) in &hdd_texture_cache {
-                        if !((lod == *sec_lod)
-                            && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                            && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                        {
-                            to_remove.push((*sec_x, *sec_y, *sec_lod));
-                        }
-                    }
-
-                    // remove tiles
-                    for (sec_x, sec_y, sec_lod) in to_remove {
-                        if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                            texture.delete();
-                        }
-                    }
-                }
-            //<
         //<> receive any retrieved tiles
             for (details, texture_option) in results_rx.try_iter() {
                 hdd_texture_cache.insert(details, texture_option);
