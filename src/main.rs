@@ -154,19 +154,9 @@ fn tile_on_screen(
     tile_dimensions: (f32, f32),
 ) -> bool {
     let (tile_x, tile_y, render_lod) = tile_data;
-    //> determine what sectors we need to render
-        //get top left sector to render
-        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
-
-        //get bottom right sector to render
-        let bottom_right_sector = sector_at_screen_pos(
-            screen_width(),
-            screen_height(),
-            &camera,
-            tile_dimensions,
-            render_lod,
-        );
-    //<
+    // determine what sectors we need to render
+    let (top_left_sector, bottom_right_sector) =
+        get_screen_sectors(&camera, tile_dimensions, render_lod);
 
     // if tile on screen
     tile_x >= top_left_sector.0
@@ -195,19 +185,9 @@ fn current_view_cached(
     camera: &CameraSettings,
     tile_dimensions: (f32, f32),
 ) -> bool {
-    //> determine what sectors we need to render
-        //get top left sector to render
-        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
-
-        //get bottom right sector to render
-        let bottom_right_sector = sector_at_screen_pos(
-            screen_width(),
-            screen_height(),
-            &camera,
-            tile_dimensions,
-            render_lod,
-        );
-    //<
+    // determine what sectors we need to render
+    let (top_left_sector, bottom_right_sector) =
+        get_screen_sectors(&camera, tile_dimensions, render_lod);
 
     let mut fully_rendered = true;
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
@@ -237,19 +217,9 @@ fn render_screen_tiles(
     let two: f32 = 2.0;
 
     for render_lod in (0..=max_lod).rev() {
-        //> determine what sectors we need to render
-            //get top left sector to render
-            let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, render_lod);
-
-            //get bottom right sector to render
-            let bottom_right_sector = sector_at_screen_pos(
-                screen_width(),
-                screen_height(),
-                &camera,
-                tile_dimensions,
-                render_lod,
-            );
-        //<
+        // determine what sectors we need to render
+        let (top_left_sector, bottom_right_sector) =
+            get_screen_sectors(&camera, tile_dimensions, render_lod);
 
         // for all cached tiles
         for ((tile_x, tile_y, tile_lod), texture_option) in hdd_texture_cache {
@@ -302,17 +272,10 @@ fn clean_tile_texture_cache(
     camera: &CameraSettings,
     lod: usize,
 ) {
-    //> determine what sectors we need to render
-        let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+    // determine what sectors we need to render
+    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
 
-        let bottom_right_sector = sector_at_screen_pos(
-            screen_width(),
-            screen_height(),
-            &camera,
-            tile_dimensions,
-            lod,
-        );
-    //<> remove tiles out of view
+    //> remove tiles out of view
 
         let mut to_remove = Vec::new();
         for (tile_data, _) in hdd_texture_cache.iter() {
@@ -615,6 +578,7 @@ async fn main() {
                     }
                 }
             }
+            
 
             // remove any finished tiles
             for (tile_x, tile_y, tile_lod) in finished_tiles {
