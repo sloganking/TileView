@@ -337,6 +337,34 @@ fn get_screen_sectors(
     (top_left_sector, bottom_right_sector)
 }
 
+fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
+    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
+    let two: f32 = 2.0;
+
+    // for all sectors to render
+    for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+        let tile_screen_y = screen_height() / 2.
+            + (camera.y_offset * camera.zoom_multiplier)
+            + sector_y as f32
+                * tile_dimensions.1 as f32
+                * camera.zoom_multiplier
+                * two.powf(lod as f32);
+
+        draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, RED);
+    }
+
+    for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+        let tile_screen_x = screen_width() / 2.
+            + (camera.x_offset * camera.zoom_multiplier)
+            + sector_x as f32
+                * tile_dimensions.0 as f32
+                * camera.zoom_multiplier
+                * two.powf(lod as f32);
+
+        draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, RED);
+    }
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -560,7 +588,7 @@ async fn main() {
 
             // possibly prepair one tile
             let mut finished_tiles = Vec::new();
-            for _ in 0..2{
+            for _ in 0..2 {
                 for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
                     if *tile_lod == lod {
                         if pool.try_run_one() {
@@ -568,10 +596,10 @@ async fn main() {
                             if let Ok((details, texture_option)) = results_rx.try_recv() {
                                 // mark for removal from retriving_pools
                                 finished_tiles.push((*tile_x, *tile_y, *tile_lod));
-    
+
                                 // store in
                                 hdd_texture_cache.insert(details, texture_option);
-    
+
                                 if let Some(_) = texture_option {
                                     break;
                                 }
@@ -580,7 +608,6 @@ async fn main() {
                     }
                 }
             }
-            
 
             // remove any finished tiles
             for (tile_x, tile_y, tile_lod) in finished_tiles {
@@ -588,33 +615,9 @@ async fn main() {
             }
 
             // println!("retriving_pools.len(): {}", retriving_pools.len());
-
-        //<> draw tile lines
-            if true {
-                // for all sectors to render
-                for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                    let tile_screen_y = screen_height() / 2.
-                        + (camera.y_offset * camera.zoom_multiplier)
-                        + sector_y as f32
-                            * tile_dimensions.1 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
-
-                    draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, RED);
-                }
-
-                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    let tile_screen_x = screen_width() / 2.
-                        + (camera.x_offset * camera.zoom_multiplier)
-                        + sector_x as f32
-                            * tile_dimensions.0 as f32
-                            * camera.zoom_multiplier
-                            * two.powf(lod as f32);
-
-                    draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, RED);
-                }
-            }
         //<
+
+        draw_tile_lines(&camera, lod, tile_dimensions);
 
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
