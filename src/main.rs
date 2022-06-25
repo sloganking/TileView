@@ -1,4 +1,5 @@
 use glob::{glob, GlobError};
+use std::collections::VecDeque;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -51,7 +52,8 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 }
 
 const TILE_DIR: &str = "./tile_images/terrain/";
-const LOD_FUZZYNESS: f32 = 1.5;
+const LOD_FUZZYNESS: f32 = 1.0;
+const TARGET_FPS: f64 = 144.;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
@@ -337,6 +339,20 @@ fn get_screen_sectors(
     (top_left_sector, bottom_right_sector)
 }
 
+fn average(numbers: &VecDeque<f64>) -> f64 {
+    numbers.iter().sum::<f64>() / numbers.len() as f64
+}
+
+fn new_rolling_average(new_value: f64, rolling_decode_buffer: &mut VecDeque<f64>) -> f64 {
+    rolling_decode_buffer.push_back(new_value);
+
+    if rolling_decode_buffer.len() > 100 {
+        rolling_decode_buffer.pop_front();
+    }
+
+    average(&rolling_decode_buffer)
+}
+
 fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
     let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
     let two: f32 = 2.0;
@@ -414,7 +430,20 @@ async fn main() {
 
     let mut retriving_pools: HashMap<(i32, i32, usize), LocalPool> = HashMap::new();
 
+    let mut last_time: f64;
+    let mut frame_start_time = get_time();
+    let frame_time_limit = 1. / TARGET_FPS;
+
+    let mut rolling_decode_buffer: VecDeque<f64> = VecDeque::new();
+    let mut rolling_average_decode_time: f64 = 0.0;
+
     loop {
+        last_time = frame_start_time;
+        frame_start_time = get_time();
+        let duration = frame_start_time - last_time;
+
+        // println!("duration: {}", duration);
+
         clear_background(GRAY);
 
         // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
@@ -581,33 +610,52 @@ async fn main() {
             let num_rendered_tiles =
                 render_screen_tiles(&hdd_texture_cache, tile_dimensions, &camera, max_lod);
 
-        //<> try run one retriving_pools
+        //<> retrieve new tiles until out of work or out of time
 
             // stop retrieving any tiles that are not current desired lod
             retriving_pools.retain(|(_, _, tile_lod), _| *tile_lod == lod);
 
             // possibly prepair one tile
             let mut finished_tiles = Vec::new();
-            for _ in 0..2 {
-                for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
-                    if *tile_lod == lod {
-                        if pool.try_run_one() {
-                            // don't break unless texture was sent back
-                            if let Ok((details, texture_option)) = results_rx.try_recv() {
-                                // mark for removal from retriving_pools
-                                finished_tiles.push((*tile_x, *tile_y, *tile_lod));
+            let mut textures_decoded = 0;
+            for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
+                // stop if out of time. But only if have decoded at least one texture
+                if textures_decoded != 0 {
+                    let time_since_last_frame = get_time() - frame_start_time;
+                    if time_since_last_frame + rolling_average_decode_time > frame_time_limit * 0.7 {
+                        break;
+                    }
+                }
 
-                                // store in
-                                hdd_texture_cache.insert(details, texture_option);
+                if *tile_lod == lod {
+                    let tile_decode_start_time = get_time();
+                    if pool.try_run_one() {
+                        // don't break unless texture was sent back
+                        if let Ok((details, texture_option)) = results_rx.try_recv() {
+                            // mark for removal from retriving_pools
+                            finished_tiles.push((*tile_x, *tile_y, *tile_lod));
 
-                                if let Some(_) = texture_option {
-                                    break;
-                                }
+                            // store in
+                            hdd_texture_cache.insert(details, texture_option);
+
+                            if texture_option != None {
+                                textures_decoded += 1;
+
+                                let last_time_to_decode = get_time() - tile_decode_start_time;
+
+                                rolling_average_decode_time = new_rolling_average(
+                                    last_time_to_decode,
+                                    &mut rolling_decode_buffer,
+                                );
                             }
                         }
                     }
                 }
             }
+
+            // if textures_decoded > 0{
+            //     println!("textures_decoded: {}",textures_decoded);
+            // }
 
             // remove any finished tiles
             for (tile_x, tile_y, tile_lod) in finished_tiles {
