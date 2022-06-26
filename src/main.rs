@@ -56,14 +56,14 @@ const LOD_FUZZYNESS: f32 = 1.0;
 const TARGET_FPS: f64 = 144.;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
-    let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
-    let out_y = screen_height() / 2. + ((camera.y_offset + y) * camera.zoom_multiplier);
+    let out_x = screen_width() / 2. + ((-camera.x_offset + x) * camera.zoom_multiplier);
+    let out_y = screen_height() / 2. + ((-camera.y_offset + y) * camera.zoom_multiplier);
     (out_x, out_y)
 }
 
 fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
-    let x_out = -camera.x_offset + (x as f32 - screen_width() / 2.) / camera.zoom_multiplier;
-    let y_out = -camera.y_offset + (y as f32 - screen_height() / 2.) / camera.zoom_multiplier;
+    let x_out = camera.x_offset + (x as f32 - screen_width() / 2.) / camera.zoom_multiplier;
+    let y_out = camera.y_offset + (y as f32 - screen_height() / 2.) / camera.zoom_multiplier;
     (x_out, y_out)
 }
 
@@ -360,7 +360,7 @@ fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f
     // for all sectors to render
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
         let tile_screen_y = screen_height() / 2.
-            + (camera.y_offset * camera.zoom_multiplier)
+            + (-camera.y_offset * camera.zoom_multiplier)
             + sector_y as f32
                 * tile_dimensions.1 as f32
                 * camera.zoom_multiplier
@@ -371,7 +371,7 @@ fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f
 
     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
         let tile_screen_x = screen_width() / 2.
-            + (camera.x_offset * camera.zoom_multiplier)
+            + (-camera.x_offset * camera.zoom_multiplier)
             + sector_x as f32
                 * tile_dimensions.0 as f32
                 * camera.zoom_multiplier
@@ -459,16 +459,16 @@ async fn main() {
             };
 
             if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-                camera.x_offset -= speed;
-            }
-            if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
                 camera.x_offset += speed;
             }
+            if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
+                camera.x_offset -= speed;
+            }
             if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
-                camera.y_offset += speed;
+                camera.y_offset -= speed;
             }
             if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
-                camera.y_offset -= speed;
+                camera.y_offset += speed;
             }
 
             let zoom_speed = if is_key_down(KeyCode::LeftShift) {
@@ -506,15 +506,15 @@ async fn main() {
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
-                camera.x_offset = -mouse_world_pos.0;
-                camera.y_offset = -mouse_world_pos.1;
+                camera.x_offset = mouse_world_pos.0;
+                camera.y_offset = mouse_world_pos.1;
 
                 let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
                 let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
 
                 // move camera by screen_x_to_change
-                camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
-                camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
+                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
             } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
                 // record mouse positions
                 let mouse_screen_pos = mouse_position();
@@ -528,33 +528,33 @@ async fn main() {
                 camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
 
                 // center camera on where mouse was in world
-                camera.x_offset = -mouse_world_pos.0;
-                camera.y_offset = -mouse_world_pos.1;
+                camera.x_offset = mouse_world_pos.0;
+                camera.y_offset = mouse_world_pos.1;
 
                 let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
                 let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
 
                 // move camera by screen_x_to_change
-                camera.x_offset += screen_x_to_change / camera.zoom_multiplier;
-                camera.y_offset += screen_y_to_change / camera.zoom_multiplier;
+                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
             }
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
                 if mouse_clicked_in_position == None {
                     mouse_clicked_in_position = Some(mouse_position());
-                    clicked_in_x_offset = camera.x_offset;
-                    clicked_in_y_offset = camera.y_offset;
+                    clicked_in_x_offset = -camera.x_offset;
+                    clicked_in_y_offset = -camera.y_offset;
                 } else {
                     let cur_mouse_pos = mouse_position();
 
                     // calc new x_offset
                     let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
-                    camera.x_offset = clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier;
+                    camera.x_offset = -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
 
                     // calc new y_offset
                     let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
-                    camera.y_offset = clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier;
+                    camera.y_offset = -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
                 }
             } else {
                 mouse_clicked_in_position = None;
@@ -716,28 +716,6 @@ async fn main() {
             30.0,
             WHITE,
         );
-
-        // draw_text(
-        //     &("camera.x_offset: ".to_owned() + &(camera.x_offset).to_string()),
-        //     20.0,
-        //     140.0,
-        //     30.0,
-        //     WHITE,
-        // );
-
-        // // draw beacon
-        // let coords = coord_to_screen_pos(0, 13000, &camera);
-        // draw_circle(coords.0, coords.1, 5.0, YELLOW);
-        // draw_text("Test beacon", coords.0, coords.1, 30.0, WHITE);
-
-        // // draw blue line on map
-        // let coords1 = coord_to_screen_pos(-4800, -5200, &camera);
-        // let coords2 = coord_to_screen_pos(13000, 0, &camera);
-        // draw_line(coords1.0, coords1.1, coords2.0, coords2.1, 15.0, BLUE);
-
-        // // draw dot at end of line
-        // let coords = coord_to_screen_pos(-4800, -5200, &camera);
-        // draw_circle(coords.0, coords.1, 15.0, BLUE);
 
         next_frame().await
     }
