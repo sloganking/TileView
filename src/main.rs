@@ -53,7 +53,6 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 
 const TILE_DIR: &str = "./tile_images/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
-const TARGET_FPS: f64 = 144.;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((-camera.x_offset + x) * camera.zoom_multiplier);
@@ -449,12 +448,14 @@ async fn main() {
 
     let mut last_time: f64;
     let mut frame_start_time = get_time();
-    let frame_time_limit = 1. / TARGET_FPS;
+    let target_fps = infer_target_fps().await;
+    let frame_time_limit = 1. / target_fps as f64;
 
     let mut rolling_decode_buffer: VecDeque<f64> = VecDeque::new();
     let mut rolling_average_decode_time: f64 = 0.0;
 
     loop {
+        // println!("get_time(): {}",get_time());
         last_time = frame_start_time;
         frame_start_time = get_time();
         let _duration = frame_start_time - last_time;
@@ -469,10 +470,11 @@ async fn main() {
         // draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
         //> react to key presses
+            let fps_speed_multiplier = 144. / target_fps as f32;
             let speed = if is_key_down(KeyCode::LeftShift) {
-                20. / camera.zoom_multiplier
+                20. / camera.zoom_multiplier * fps_speed_multiplier
             } else {
-                5. / camera.zoom_multiplier
+                5. / camera.zoom_multiplier * fps_speed_multiplier
             };
 
             if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
@@ -489,9 +491,9 @@ async fn main() {
             }
 
             let zoom_speed = if is_key_down(KeyCode::LeftShift) {
-                camera.zoom_multiplier / 100. * 4.
+                camera.zoom_multiplier / 100. * 4. * fps_speed_multiplier
             } else {
-                camera.zoom_multiplier / 100.
+                camera.zoom_multiplier / 100. * fps_speed_multiplier
             };
 
             // zoom via buttons
