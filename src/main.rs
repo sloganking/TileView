@@ -381,6 +381,23 @@ fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f
     }
 }
 
+fn median(numbers: &mut [i32]) -> i32 {
+    numbers.sort();
+    let mid = numbers.len() / 2;
+    numbers[mid]
+}
+
+async fn infer_target_fps() -> i32 {
+    let fps_test_start_time = get_time();
+    let mut fps_records: Vec<i32> = Vec::new();
+    while get_time() - fps_test_start_time < 0.5 {
+        fps_records.push(get_fps());
+        next_frame().await;
+    }
+    let target_fps = median(&mut fps_records);
+    target_fps
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
