@@ -446,8 +446,6 @@ async fn main() {
 
     let mut retriving_pools: HashMap<(i32, i32, usize), LocalPool> = HashMap::new();
 
-    let mut last_time: f64;
-    let mut frame_start_time = get_time();
     let target_fps = infer_target_fps().await;
     let frame_time_limit = 1. / target_fps as f64;
 
@@ -455,12 +453,7 @@ async fn main() {
     let mut rolling_average_decode_time: f64 = 0.0;
 
     loop {
-        // println!("get_time(): {}",get_time());
-        last_time = frame_start_time;
-        frame_start_time = get_time();
-        let _duration = frame_start_time - last_time;
-
-        // println!("duration: {}", duration);
+        let frame_start_time = get_time();
 
         clear_background(GRAY);
 
