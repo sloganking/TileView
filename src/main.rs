@@ -412,7 +412,7 @@ async fn main() {
     let initial_texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
     tile_dimensions.0 = initial_texture.width();
     tile_dimensions.1 = initial_texture.height();
-    // initial_texture.delete();
+    initial_texture.delete();
 
     // get max_lod
     let mut max_lod: usize = 0;
