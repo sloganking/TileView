@@ -440,7 +440,7 @@ async fn main() {
     loop {
         last_time = frame_start_time;
         frame_start_time = get_time();
-        let duration = frame_start_time - last_time;
+        let _duration = frame_start_time - last_time;
 
         // println!("duration: {}", duration);
 
