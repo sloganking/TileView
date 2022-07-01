@@ -1,5 +1,6 @@
 use glob::{glob, GlobError};
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -126,11 +127,12 @@ fn sector_at_screen_pos(
 /// stores texture in hdd_texture_cache. Does not check if it is already there.
 async fn cache_texture(
     tile_data: (i32, i32, usize),
+    tile_dir: String,
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
-    let texture_dir = TILE_DIR.to_owned()
+    let texture_dir = tile_dir.to_owned()
         + &lod.to_string()
         + "/"
         + &sector_x.to_string()
@@ -403,6 +405,17 @@ struct CameraSettings {
     zoom_multiplier: f32,
 }
 
+#[derive(PartialEq)]
+#[derive(Debug)]
+enum MapType{
+    Terrain,
+    Night,
+    Height,
+    Biome,
+    Simple,
+    Light,
+}
+
 #[macroquad::main("Map Renderer")]
 async fn main() {
     // get initial tile dimensions
@@ -453,8 +466,19 @@ async fn main() {
     let mut rolling_average_decode_time: f64 = 0.0;
 
     let mut render_lod_lines = false;
+    let mut selected_map_type = MapType::Terrain;
 
     loop {
+
+        let tile_type_string = match selected_map_type{
+            MapType::Terrain => "terrain",
+            MapType::Night => "night",
+            MapType::Height => "height",
+            MapType::Biome => "biome",
+            MapType::Simple => "simple",
+            MapType::Light => "light",
+        };
+        let tile_dir = "./tile_images/world/".to_owned() + tile_type_string + "/";
         let frame_start_time = get_time();
 
         clear_background(GRAY);
@@ -604,7 +628,8 @@ async fn main() {
                         // };
 
                         if let None = retriving_pools.get(&(sector_x, sector_y, lod)) {
-                            let f = cache_texture((sector_x, sector_y, lod), results_tx.clone());
+                            let tile_dir2 = tile_dir.clone();
+                            let f = cache_texture((sector_x, sector_y, lod), tile_dir2, results_tx.clone());
 
                             // spawner.spawn_local(f).unwrap();
 
@@ -733,6 +758,18 @@ async fn main() {
                 ui.heading("Render Options");
 
                 ui.checkbox(&mut render_lod_lines, "Render LOD lines");
+
+                egui::ComboBox::from_label("Select one!")
+                    .selected_text(format!("{:?}", selected_map_type))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut selected_map_type, MapType::Terrain, "Terrain");
+                        ui.selectable_value(&mut selected_map_type, MapType::Night, "Night");
+                        ui.selectable_value(&mut selected_map_type, MapType::Height, "Height");
+                        ui.selectable_value(&mut selected_map_type, MapType::Biome, "Biome");
+                        ui.selectable_value(&mut selected_map_type, MapType::Simple, "Simple");
+                        ui.selectable_value(&mut selected_map_type, MapType::Light, "Light");
+                    }
+                );
 
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                     ui.horizontal(|ui| {
