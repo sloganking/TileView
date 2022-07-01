@@ -51,7 +51,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/terrain/";
+const TILE_DIR: &str = "./tile_images/world/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -452,6 +452,8 @@ async fn main() {
     let mut rolling_decode_buffer: VecDeque<f64> = VecDeque::new();
     let mut rolling_average_decode_time: f64 = 0.0;
 
+    let mut render_lod_lines = false;
+
     loop {
         let frame_start_time = get_time();
 
@@ -665,23 +667,20 @@ async fn main() {
                 }
             }
 
-            // if textures_decoded > 0{
-            //     println!("textures_decoded: {}",textures_decoded);
-            // }
-
             // remove any finished tiles
             for (tile_x, tile_y, tile_lod) in finished_tiles {
                 retriving_pools.remove(&(tile_x, tile_y, tile_lod));
             }
 
-            // println!("retriving_pools.len(): {}", retriving_pools.len());
         //<
 
-        draw_tile_lines(&camera, lod, tile_dimensions);
-
+        if render_lod_lines {
+            draw_tile_lines(&camera, lod, tile_dimensions);
+        }
+        let text_x_offset = 180.0;
         draw_text(
             &("fps: ".to_owned() + &get_fps().to_string()),
-            20.0,
+            text_x_offset,
             20.0,
             30.0,
             WHITE,
@@ -689,7 +688,7 @@ async fn main() {
 
         draw_text(
             &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
-            20.0,
+            text_x_offset,
             40.0,
             30.0,
             WHITE,
@@ -697,7 +696,7 @@ async fn main() {
 
         draw_text(
             &("LOD: ".to_owned() + &lod.to_string()),
-            20.0,
+            text_x_offset,
             60.0,
             30.0,
             WHITE,
@@ -705,7 +704,7 @@ async fn main() {
 
         draw_text(
             &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
-            20.0,
+            text_x_offset,
             80.0,
             30.0,
             WHITE,
@@ -715,7 +714,7 @@ async fn main() {
         let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
         draw_text(
             &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
-            20.0,
+            text_x_offset,
             100.0,
             30.0,
             WHITE,
@@ -723,11 +722,34 @@ async fn main() {
 
         draw_text(
             &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
-            20.0,
+            text_x_offset,
             120.0,
             30.0,
             WHITE,
         );
+
+        egui_macroquad::ui(|egui_ctx| {
+            egui::SidePanel::left("egui ❤ macroquad").show(egui_ctx, |ui| {
+                ui.heading("Render Options");
+
+                ui.checkbox(&mut render_lod_lines, "Render LOD lines");
+
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        ui.label("powered by ");
+                        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+                        ui.label(" and ");
+                        ui.hyperlink_to(
+                            "eframe",
+                            "https://github.com/emilk/egui/tree/master/eframe",
+                        );
+                    });
+                });
+            });
+        });
+
+        egui_macroquad::draw();
 
         next_frame().await
     }
