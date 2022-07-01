@@ -1,3 +1,5 @@
+use futures::executor::LocalPool;
+use futures::task::LocalSpawnExt;
 use glob::{glob, GlobError};
 use std::collections::VecDeque;
 use std::{
@@ -352,6 +354,7 @@ fn new_rolling_average(new_value: f64, rolling_decode_buffer: &mut VecDeque<f64>
     average(&rolling_decode_buffer)
 }
 
+/// draws a grid over the screen that outlines the size of tiles being currently rendered
 fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
     let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
     let two: f32 = 2.0;
@@ -395,6 +398,36 @@ async fn infer_target_fps() -> i32 {
     }
     let target_fps = median(&mut fps_records);
     target_fps
+}
+
+fn cache_desired_textures(
+    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
+    retriving_pools: &mut HashMap<(i32, i32, usize), LocalPool>,
+    camera: &CameraSettings,
+    tile_dimensions: (f32, f32),
+    lod: usize,
+    results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
+) {
+    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
+
+    // for all sectors to render
+    for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+        for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+            // if tile not in cache
+            if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
+                if let None = retriving_pools.get(&(sector_x, sector_y, lod)) {
+                    let f = cache_texture((sector_x, sector_y, lod), results_tx.clone());
+
+                    // create LocalPool with one task inside
+                    let pool = LocalPool::new();
+                    let spawner = pool.spawner();
+                    spawner.spawn_local(f).unwrap();
+
+                    retriving_pools.insert((sector_x, sector_y, lod), pool);
+                }
+            }
+        }
+    }
 }
 
 struct CameraSettings {
@@ -455,7 +488,7 @@ async fn main() {
     loop {
         let frame_start_time = get_time();
 
-        clear_background(GRAY);
+        // clear_background(GRAY);
 
         // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
         // draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
@@ -576,51 +609,82 @@ async fn main() {
 
         let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
 
-        // determine what sectors we need to render
-        let (top_left_sector, bottom_right_sector) =
-            get_screen_sectors(&camera, tile_dimensions, lod);
+        // receive any retrieved tiles
+        for (details, texture_option) in results_rx.try_iter() {
+            hdd_texture_cache.insert(details, texture_option);
+            retriving_pools.remove(&details);
+        }
 
         // clean up any unrendered textures
         clean_tile_texture_cache(&mut &mut hdd_texture_cache, tile_dimensions, &camera, lod);
 
-        //> receive any retrieved tiles
-            for (details, texture_option) in results_rx.try_iter() {
-                hdd_texture_cache.insert(details, texture_option);
-                retriving_pools.remove(&details);
-            }
-        //<> cache desired textures
-
-            // for all sectors to render
-            for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-                for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-                    // if tile not in cache
-                    if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
-                        // if tile being retrived
-                        // let tile_found = match {
-                        //     Some(_) => true,
-                        //     None => false,
-                        // };
-
-                        if let None = retriving_pools.get(&(sector_x, sector_y, lod)) {
-                            let f = cache_texture((sector_x, sector_y, lod), results_tx.clone());
-
-                            // spawner.spawn_local(f).unwrap();
-
-                            // create LocalPool with one task inside
-                            let pool = LocalPool::new();
-                            let spawner = pool.spawner();
-                            spawner.spawn_local(f).unwrap();
-
-                            retriving_pools.insert((sector_x, sector_y, lod), pool);
-                        }
-                    }
-                }
-            }
+        //> cache desired textures
+            cache_desired_textures(
+                &hdd_texture_cache,
+                &mut retriving_pools,
+                &camera,
+                tile_dimensions,
+                lod,
+                results_tx.clone(),
+            );
 
         //<> draw all textures
-
             let num_rendered_tiles =
                 render_screen_tiles(&hdd_texture_cache, tile_dimensions, &camera, max_lod);
+        //<
+
+        draw_tile_lines(&camera, lod, tile_dimensions);
+
+        //> draw text in top left corner
+            draw_text(
+                &("fps: ".to_owned() + &get_fps().to_string()),
+                20.0,
+                20.0,
+                30.0,
+                WHITE,
+            );
+
+            draw_text(
+                &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
+                20.0,
+                40.0,
+                30.0,
+                WHITE,
+            );
+
+            draw_text(
+                &("LOD: ".to_owned() + &lod.to_string()),
+                20.0,
+                60.0,
+                30.0,
+                WHITE,
+            );
+
+            draw_text(
+                &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
+                20.0,
+                80.0,
+                30.0,
+                WHITE,
+            );
+
+            let mouse = mouse_position();
+            let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
+            draw_text(
+                &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
+                20.0,
+                100.0,
+                30.0,
+                WHITE,
+            );
+
+            draw_text(
+                &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
+                20.0,
+                120.0,
+                30.0,
+                WHITE,
+            );
 
         //<> retrieve new tiles until out of work or out of time
 
@@ -676,58 +740,6 @@ async fn main() {
 
             // println!("retriving_pools.len(): {}", retriving_pools.len());
         //<
-
-        draw_tile_lines(&camera, lod, tile_dimensions);
-
-        draw_text(
-            &("fps: ".to_owned() + &get_fps().to_string()),
-            20.0,
-            20.0,
-            30.0,
-            WHITE,
-        );
-
-        draw_text(
-            &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
-            20.0,
-            40.0,
-            30.0,
-            WHITE,
-        );
-
-        draw_text(
-            &("LOD: ".to_owned() + &lod.to_string()),
-            20.0,
-            60.0,
-            30.0,
-            WHITE,
-        );
-
-        draw_text(
-            &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
-            20.0,
-            80.0,
-            30.0,
-            WHITE,
-        );
-
-        let mouse = mouse_position();
-        let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
-        draw_text(
-            &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
-            20.0,
-            100.0,
-            30.0,
-            WHITE,
-        );
-
-        draw_text(
-            &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
-            20.0,
-            120.0,
-            30.0,
-            WHITE,
-        );
 
         next_frame().await
     }
