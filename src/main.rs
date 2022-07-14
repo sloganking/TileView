@@ -53,7 +53,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/terrain/";
+const TILE_DIR: &str = "./tile_images/james_web/Cosmic_Cliffs/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -430,6 +430,124 @@ fn cache_desired_textures(
     }
 }
 
+fn react_to_key_presses(
+    camera: &mut CameraSettings,
+    target_fps: i32,
+    mouse_clicked_in_position: &mut Option<(f32, f32)>,
+    clicked_in_x_offset: &mut f32,
+    clicked_in_y_offset: &mut f32,
+    max_lod: usize,
+) {
+    let two:f32 = 2.0;
+
+    let fps_speed_multiplier = 144. / target_fps as f32;
+    let speed = if is_key_down(KeyCode::LeftShift) {
+        20. / camera.zoom_multiplier * fps_speed_multiplier
+    } else {
+        5. / camera.zoom_multiplier * fps_speed_multiplier
+    };
+
+    if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
+        camera.x_offset += speed;
+    }
+    if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
+        camera.x_offset -= speed;
+    }
+    if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
+        camera.y_offset -= speed;
+    }
+    if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
+        camera.y_offset += speed;
+    }
+
+    let zoom_speed = if is_key_down(KeyCode::LeftShift) {
+        camera.zoom_multiplier / 100. * 4. * fps_speed_multiplier
+    } else {
+        camera.zoom_multiplier / 100. * fps_speed_multiplier
+    };
+
+    // zoom via buttons
+    if is_key_down(KeyCode::E) {
+        camera.zoom_multiplier += zoom_speed;
+    }
+    if is_key_down(KeyCode::Q) {
+        camera.zoom_multiplier -= zoom_speed;
+    }
+
+    let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
+    let max_zoom = 20.0;
+
+    // limit the zoom
+    camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+    // zoom via scroll wheel
+    let (_, mouse_scroll) = mouse_wheel();
+    if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
+        // record mouse positions
+        let mouse_screen_pos = mouse_position();
+        let mouse_world_pos = screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+        // zoom in
+        camera.zoom_multiplier += zoom_speed * 10.;
+
+        // limit the zoom
+        camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+        // center camera on where mouse was in world
+        camera.x_offset = mouse_world_pos.0;
+        camera.y_offset = mouse_world_pos.1;
+
+        let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+        let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+        // move camera by screen_x_to_change
+        camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+        camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
+    } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
+        // record mouse positions
+        let mouse_screen_pos = mouse_position();
+        let mouse_world_pos = screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+        // zoom out
+        camera.zoom_multiplier -= zoom_speed * 10.;
+
+        // limit the zoom
+        camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+        // center camera on where mouse was in world
+        camera.x_offset = mouse_world_pos.0;
+        camera.y_offset = mouse_world_pos.1;
+
+        let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+        let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+        // move camera by screen_x_to_change
+        camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+        camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
+    }
+
+    // mouse drag screen
+    if is_mouse_button_down(MouseButton::Left) {
+        if *mouse_clicked_in_position == None {
+            *mouse_clicked_in_position = Some(mouse_position());
+            *clicked_in_x_offset = -camera.x_offset;
+            *clicked_in_y_offset = -camera.y_offset;
+        } else {
+            let cur_mouse_pos = mouse_position();
+
+            // calc new x_offset
+            let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
+            camera.x_offset = -(*clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
+
+            // calc new y_offset
+            let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
+            camera.y_offset = -(*clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
+        }
+    } else {
+        *mouse_clicked_in_position = None;
+    }
+}
+
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
@@ -488,7 +606,7 @@ async fn main() {
     loop {
         let frame_start_time = get_time();
 
-        // clear_background(GRAY);
+        clear_background(GRAY);
 
         // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
         // draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
@@ -496,114 +614,14 @@ async fn main() {
         // draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
         //> react to key presses
-            let fps_speed_multiplier = 144. / target_fps as f32;
-            let speed = if is_key_down(KeyCode::LeftShift) {
-                20. / camera.zoom_multiplier * fps_speed_multiplier
-            } else {
-                5. / camera.zoom_multiplier * fps_speed_multiplier
-            };
-
-            if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-                camera.x_offset += speed;
-            }
-            if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
-                camera.x_offset -= speed;
-            }
-            if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
-                camera.y_offset -= speed;
-            }
-            if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
-                camera.y_offset += speed;
-            }
-
-            let zoom_speed = if is_key_down(KeyCode::LeftShift) {
-                camera.zoom_multiplier / 100. * 4. * fps_speed_multiplier
-            } else {
-                camera.zoom_multiplier / 100. * fps_speed_multiplier
-            };
-
-            // zoom via buttons
-            if is_key_down(KeyCode::E) {
-                camera.zoom_multiplier += zoom_speed;
-            }
-            if is_key_down(KeyCode::Q) {
-                camera.zoom_multiplier -= zoom_speed;
-            }
-
-            let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
-            let max_zoom = 20.0;
-
-            // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-            // zoom via scroll wheel
-            let (_, mouse_scroll) = mouse_wheel();
-            if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
-                // record mouse positions
-                let mouse_screen_pos = mouse_position();
-                let mouse_world_pos =
-                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
-
-                // zoom in
-                camera.zoom_multiplier += zoom_speed * 10.;
-
-                // limit the zoom
-                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-                // center camera on where mouse was in world
-                camera.x_offset = mouse_world_pos.0;
-                camera.y_offset = mouse_world_pos.1;
-
-                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
-                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
-
-                // move camera by screen_x_to_change
-                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
-                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
-            } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
-                // record mouse positions
-                let mouse_screen_pos = mouse_position();
-                let mouse_world_pos =
-                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
-
-                // zoom out
-                camera.zoom_multiplier -= zoom_speed * 10.;
-
-                // limit the zoom
-                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-                // center camera on where mouse was in world
-                camera.x_offset = mouse_world_pos.0;
-                camera.y_offset = mouse_world_pos.1;
-
-                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
-                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
-
-                // move camera by screen_x_to_change
-                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
-                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
-            }
-
-            // mouse drag screen
-            if is_mouse_button_down(MouseButton::Left) {
-                if mouse_clicked_in_position == None {
-                    mouse_clicked_in_position = Some(mouse_position());
-                    clicked_in_x_offset = -camera.x_offset;
-                    clicked_in_y_offset = -camera.y_offset;
-                } else {
-                    let cur_mouse_pos = mouse_position();
-
-                    // calc new x_offset
-                    let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
-                    camera.x_offset = -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
-
-                    // calc new y_offset
-                    let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
-                    camera.y_offset = -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
-                }
-            } else {
-                mouse_clicked_in_position = None;
-            }
+            react_to_key_presses(
+                &mut camera,
+                target_fps,
+                &mut mouse_clicked_in_position,
+                &mut clicked_in_x_offset,
+                &mut clicked_in_y_offset,
+                max_lod,
+            );
 
         //<
 
@@ -633,7 +651,7 @@ async fn main() {
                 render_screen_tiles(&hdd_texture_cache, tile_dimensions, &camera, max_lod);
         //<
 
-        draw_tile_lines(&camera, lod, tile_dimensions);
+        // draw_tile_lines(&camera, lod, tile_dimensions);
 
         //> draw text in top left corner
             draw_text(
