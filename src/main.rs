@@ -21,26 +21,26 @@ use macroquad::prelude::*;
 /// Returns a list of all files in a directory and it's subdirectories
 fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobError> {
     //> get list of all files and dirs in path, using glob
-    let mut paths = Vec::new();
+        let mut paths = Vec::new();
 
-    let mut potential_slash = "";
-    if PathBuf::from(path).is_dir() && !path.ends_with('/') {
-        potential_slash = "/";
-    }
-
-    let search_params = String::from(path) + potential_slash + "**/*" + filetype;
-
-    for entry in glob(&search_params).expect("Failed to read glob pattern") {
-        match entry {
-            Ok(path) => {
-                paths.push(path);
-            }
-            Err(e) => return Err(e),
+        let mut potential_slash = "";
+        if PathBuf::from(path).is_dir() && !path.ends_with('/') {
+            potential_slash = "/";
         }
-    }
+
+        let search_params = String::from(path) + potential_slash + "**/*" + filetype;
+
+        for entry in glob(&search_params).expect("Failed to read glob pattern") {
+            match entry {
+                Ok(path) => {
+                    paths.push(path);
+                }
+                Err(e) => return Err(e),
+            }
+        }
 
     //<> filter out directories
-    let paths = paths.into_iter().filter(|e| e.is_file());
+        let paths = paths.into_iter().filter(|e| e.is_file());
     //<
 
     let paths: Vec<PathBuf> = paths.into_iter().collect();
@@ -63,33 +63,33 @@ fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
 }
 
 //> rectangle
-// struct Rectangle {
-//     x: f32,
-//     y: f32,
-//     width: f32,
-//     height: f32,
-// }
+    // struct Rectangle {
+    //     x: f32,
+    //     y: f32,
+    //     width: f32,
+    //     height: f32,
+    // }
 
-// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-//     (value >= min) && (value <= max)
-// }
+    // fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+    //     (value >= min) && (value <= max)
+    // }
 
-// /// returns true if two rectangles overlap
-// ///
-// /// Resources:
-// ///
-// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-// ///
-// /// https://silentmatt.com/rectangle-intersection/
-// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-//     let x_overlap =
-//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+    // /// returns true if two rectangles overlap
+    // ///
+    // /// Resources:
+    // ///
+    // /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+    // ///
+    // /// https://silentmatt.com/rectangle-intersection/
+    // fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+    //     let x_overlap =
+    //         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
 
-//     let y_overlap =
-//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+    //     let y_overlap =
+    //         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
-//     x_overlap && y_overlap
-// }
+    //     x_overlap && y_overlap
+    // }
 //<
 
 fn sector_at_screen_pos(
@@ -121,7 +121,7 @@ fn sector_at_screen_pos(
     (screen_point_sector_x, screen_point_sector_y)
 }
 
-/// stores texture in hdd_texture_cache. Does not check if it is already there.
+/// stores texture in texture_cache. Does not check if it is already there.
 async fn cache_texture(
     tile_data: (i32, i32, usize),
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
@@ -179,7 +179,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
 
 /// determine if current desired view is fully cached and ready to be rendered
 fn current_view_cached(
-    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
+    texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
     render_lod: usize,
     camera: &CameraSettings,
     tile_dimensions: (f32, f32),
@@ -192,7 +192,7 @@ fn current_view_cached(
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
         for sector_x in top_left_sector.0..=bottom_right_sector.0 {
             // render texture
-            if hdd_texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
+            if texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
                 fully_rendered = false;
                 break;
             }
@@ -291,7 +291,7 @@ struct CameraSettings {
 
 struct TileViewer {
     tile_dir: String,
-    hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>>,
+    texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>>,
     retriving_pools: HashMap<(i32, i32, usize), LocalPool>,
     tile_dimensions: (f32, f32),
     max_lod: usize,
@@ -309,7 +309,7 @@ impl TileViewer {
         ) = mpsc::channel();
         TileViewer {
             tile_dir: dir.to_owned(),
-            hdd_texture_cache: HashMap::new(),
+            texture_cache: HashMap::new(),
             retriving_pools: HashMap::new(),
             tile_dimensions: {
                 // return dimentions of a random tile in lod 0
@@ -331,6 +331,7 @@ impl TileViewer {
         }
     }
 
+    /// Queues tiles from the current LOD that should be rendered on screen, for being retrieved and stored in cache, if they are not already.
     fn cache_desired_textures(&mut self, camera: &CameraSettings) {
         let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
         let (top_left_sector, bottom_right_sector) =
@@ -340,7 +341,7 @@ impl TileViewer {
         for sector_y in top_left_sector.1..=bottom_right_sector.1 {
             for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                 // if tile not in cache
-                if let None = self.hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
+                if let None = self.texture_cache.get(&(sector_x, sector_y, lod)) {
                     // if not actively retrieving
                     if let None = self.retriving_pools.get(&(sector_x, sector_y, lod)) {
                         let f = cache_texture((sector_x, sector_y, lod), self.results_tx.clone());
@@ -357,6 +358,11 @@ impl TileViewer {
         }
     }
 
+    /// Removes unused tiles from texture_cache
+    ///
+    /// Removes any tiles in cache that are not visible on screen.
+    ///
+    /// Removes all tiles not in the desired LOD, only when the tile cache contains a full screen of tiles from the desired LOD.
     fn clean_tile_texture_cache(&mut self, camera: &CameraSettings) {
         let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
 
@@ -366,58 +372,54 @@ impl TileViewer {
 
         //> remove tiles out of view
 
-        let mut to_remove = Vec::new();
-        for (tile_data, _) in self.hdd_texture_cache.iter() {
-            if !tile_on_screen(*tile_data, &camera, self.tile_dimensions) {
-                to_remove.push(*tile_data);
-            }
-        }
-
-        // remove tiles
-        for (sec_x, sec_y, sec_lod) in to_remove {
-            if let Some(texture) = self
-                .hdd_texture_cache
-                .remove(&(sec_x, sec_y, sec_lod))
-                .unwrap()
-            {
-                texture.delete();
-            }
-        }
-
-        //<> determine if current desired view is fully rendered
-        let fully_rendered =
-            current_view_cached(&self.hdd_texture_cache, lod, &camera, self.tile_dimensions);
-
-        //<> possibly remove tiles in wrong lod
-
-        // clear texture cache only if fully rendering what we want to be
-        if fully_rendered {
-            // find tiles to remove
             let mut to_remove = Vec::new();
-            for ((sec_x, sec_y, sec_lod), _) in self.hdd_texture_cache.iter() {
-                if !((lod == *sec_lod)
-                    && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                    && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                {
-                    to_remove.push((*sec_x, *sec_y, *sec_lod));
+            for (tile_data, _) in self.texture_cache.iter() {
+                if !tile_on_screen(*tile_data, &camera, self.tile_dimensions) {
+                    to_remove.push(*tile_data);
                 }
             }
 
             // remove tiles
             for (sec_x, sec_y, sec_lod) in to_remove {
-                if let Some(texture) = self
-                    .hdd_texture_cache
-                    .remove(&(sec_x, sec_y, sec_lod))
-                    .unwrap()
-                {
+                if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
                     texture.delete();
                 }
             }
-        }
+
+        //<> determine if current desired view is fully rendered
+            let fully_rendered =
+                current_view_cached(&self.texture_cache, lod, &camera, self.tile_dimensions);
+
+        //<> possibly remove tiles in wrong lod
+
+            // clear texture cache only if fully rendering what we want to be
+            if fully_rendered {
+                // find tiles to remove
+                let mut to_remove = Vec::new();
+                for ((sec_x, sec_y, sec_lod), _) in self.texture_cache.iter() {
+                    if !((lod == *sec_lod)
+                        && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                        && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                    {
+                        to_remove.push((*sec_x, *sec_y, *sec_lod));
+                    }
+                }
+
+                // remove tiles
+                for (sec_x, sec_y, sec_lod) in to_remove {
+                    if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap()
+                    {
+                        texture.delete();
+                    }
+                }
+            }
         //<
     }
 
-    /// renders image tiles and returns how many are currently being rendered
+    /// Renders image tiles and returns how many are currently being rendered
+    ///
+    /// Renders all image tiles in tile cache that are on screen. Including tiles with an LOD different from the current one.
+    /// Larger LOD tiles are rendered first, so as to fill in holes left by smaller LOD tiles that have not been cached yet.
     fn render_screen_tiles(&self, camera: &CameraSettings) -> u32 {
         let mut num_rendered_tiles: u32 = 0;
         let two: f32 = 2.0;
@@ -428,7 +430,7 @@ impl TileViewer {
                 get_screen_sectors(&camera, self.tile_dimensions, render_lod);
 
             // for all cached tiles
-            for ((tile_x, tile_y, tile_lod), texture_option) in &self.hdd_texture_cache {
+            for ((tile_x, tile_y, tile_lod), texture_option) in &self.texture_cache {
                 // if correct LOD
                 if *tile_lod == render_lod {
                     // if tile on screen
@@ -472,14 +474,19 @@ impl TileViewer {
         num_rendered_tiles
     }
 
-    fn recieve_retrieved_tiles(&mut self) {
-        // receive any retrieved tiles
-        for (details, texture_option) in self.results_rx.try_iter() {
-            self.hdd_texture_cache.insert(details, texture_option);
-            self.retriving_pools.remove(&details);
-        }
-    }
+    // fn recieve_retrieved_tiles(&mut self) {
+    //     // receive any retrieved tiles
+    //     for (details, texture_option) in self.results_rx.try_iter() {
+    //         self.texture_cache.insert(details, texture_option);
+    //         self.retriving_pools.remove(&details);
+    //     }
+    // }
 
+    /// Retrieves tiles requested by cache_desired_textures() and stores them in texture_cache
+    ///
+    /// Always retrieves at least one tile, assuming at least one needs to be retrieved.
+    ///
+    /// Retrieves more tiles if there is time to do so before the next frame needs to be rendered.
     fn retrieve_tiles_till_out_of_work_or_time(
         &mut self,
         camera: &CameraSettings,
@@ -514,7 +521,7 @@ impl TileViewer {
                         finished_tiles.push((*tile_x, *tile_y, *tile_lod));
 
                         // store in
-                        self.hdd_texture_cache.insert(details, texture_option);
+                        self.texture_cache.insert(details, texture_option);
 
                         if texture_option != None {
                             textures_decoded += 1;
@@ -530,10 +537,6 @@ impl TileViewer {
                 }
             }
         }
-
-        // if textures_decoded > 0{
-        //     println!("textures_decoded: {}",textures_decoded);
-        // }
 
         // remove any finished tiles
         for (tile_x, tile_y, tile_lod) in finished_tiles {
@@ -590,181 +593,181 @@ async fn main() {
         let frame_start_time = get_time();
 
         //> react to key presses
-        let fps_speed_multiplier = 144. / target_fps as f32;
-        let speed = if is_key_down(KeyCode::LeftShift) {
-            20. / camera.zoom_multiplier * fps_speed_multiplier
-        } else {
-            5. / camera.zoom_multiplier * fps_speed_multiplier
-        };
-
-        if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
-            camera.x_offset += speed;
-        }
-        if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
-            camera.x_offset -= speed;
-        }
-        if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
-            camera.y_offset -= speed;
-        }
-        if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
-            camera.y_offset += speed;
-        }
-
-        let zoom_speed = if is_key_down(KeyCode::LeftShift) {
-            camera.zoom_multiplier / 100. * 4. * fps_speed_multiplier
-        } else {
-            camera.zoom_multiplier / 100. * fps_speed_multiplier
-        };
-
-        // zoom via buttons
-        if is_key_down(KeyCode::E) {
-            camera.zoom_multiplier += zoom_speed;
-        }
-        if is_key_down(KeyCode::Q) {
-            camera.zoom_multiplier -= zoom_speed;
-        }
-
-        let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
-        let max_zoom = 20.0;
-
-        // limit the zoom
-        camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-        // zoom via scroll wheel
-        let (_, mouse_scroll) = mouse_wheel();
-        if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
-            // record mouse positions
-            let mouse_screen_pos = mouse_position();
-            let mouse_world_pos =
-                screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
-
-            // zoom in
-            camera.zoom_multiplier += zoom_speed * 10.;
-
-            // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-            // center camera on where mouse was in world
-            camera.x_offset = mouse_world_pos.0;
-            camera.y_offset = mouse_world_pos.1;
-
-            let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
-            let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
-
-            // move camera by screen_x_to_change
-            camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
-            camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
-        } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
-            // record mouse positions
-            let mouse_screen_pos = mouse_position();
-            let mouse_world_pos =
-                screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
-
-            // zoom out
-            camera.zoom_multiplier -= zoom_speed * 10.;
-
-            // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
-
-            // center camera on where mouse was in world
-            camera.x_offset = mouse_world_pos.0;
-            camera.y_offset = mouse_world_pos.1;
-
-            let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
-            let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
-
-            // move camera by screen_x_to_change
-            camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
-            camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
-        }
-
-        // mouse drag screen
-        if is_mouse_button_down(MouseButton::Left) {
-            if mouse_clicked_in_position == None {
-                mouse_clicked_in_position = Some(mouse_position());
-                clicked_in_x_offset = -camera.x_offset;
-                clicked_in_y_offset = -camera.y_offset;
+            let fps_speed_multiplier = 144. / target_fps as f32;
+            let speed = if is_key_down(KeyCode::LeftShift) {
+                20. / camera.zoom_multiplier * fps_speed_multiplier
             } else {
-                let cur_mouse_pos = mouse_position();
+                5. / camera.zoom_multiplier * fps_speed_multiplier
+            };
 
-                // calc new x_offset
-                let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
-                camera.x_offset = -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
-
-                // calc new y_offset
-                let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
-                camera.y_offset = -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
+            if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
+                camera.x_offset += speed;
             }
-        } else {
-            mouse_clicked_in_position = None;
-        }
+            if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
+                camera.x_offset -= speed;
+            }
+            if is_key_down(KeyCode::Up) || is_key_down(KeyCode::W) {
+                camera.y_offset -= speed;
+            }
+            if is_key_down(KeyCode::Down) || is_key_down(KeyCode::S) {
+                camera.y_offset += speed;
+            }
+
+            let zoom_speed = if is_key_down(KeyCode::LeftShift) {
+                camera.zoom_multiplier / 100. * 4. * fps_speed_multiplier
+            } else {
+                camera.zoom_multiplier / 100. * fps_speed_multiplier
+            };
+
+            // zoom via buttons
+            if is_key_down(KeyCode::E) {
+                camera.zoom_multiplier += zoom_speed;
+            }
+            if is_key_down(KeyCode::Q) {
+                camera.zoom_multiplier -= zoom_speed;
+            }
+
+            let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
+            let max_zoom = 20.0;
+
+            // limit the zoom
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+            // zoom via scroll wheel
+            let (_, mouse_scroll) = mouse_wheel();
+            if mouse_scroll == 1.0 && camera.zoom_multiplier < max_zoom {
+                // record mouse positions
+                let mouse_screen_pos = mouse_position();
+                let mouse_world_pos =
+                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+                // zoom in
+                camera.zoom_multiplier += zoom_speed * 10.;
+
+                // limit the zoom
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+                // center camera on where mouse was in world
+                camera.x_offset = mouse_world_pos.0;
+                camera.y_offset = mouse_world_pos.1;
+
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+                // move camera by screen_x_to_change
+                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
+            } else if mouse_scroll == -1.0 && camera.zoom_multiplier > min_zoom {
+                // record mouse positions
+                let mouse_screen_pos = mouse_position();
+                let mouse_world_pos =
+                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+
+                // zoom out
+                camera.zoom_multiplier -= zoom_speed * 10.;
+
+                // limit the zoom
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+
+                // center camera on where mouse was in world
+                camera.x_offset = mouse_world_pos.0;
+                camera.y_offset = mouse_world_pos.1;
+
+                let screen_x_to_change = mouse_screen_pos.0 - screen_width() / 2.;
+                let screen_y_to_change = mouse_screen_pos.1 - screen_height() / 2.;
+
+                // move camera by screen_x_to_change
+                camera.x_offset -= screen_x_to_change / camera.zoom_multiplier;
+                camera.y_offset -= screen_y_to_change / camera.zoom_multiplier;
+            }
+
+            // mouse drag screen
+            if is_mouse_button_down(MouseButton::Left) {
+                if mouse_clicked_in_position == None {
+                    mouse_clicked_in_position = Some(mouse_position());
+                    clicked_in_x_offset = -camera.x_offset;
+                    clicked_in_y_offset = -camera.y_offset;
+                } else {
+                    let cur_mouse_pos = mouse_position();
+
+                    // calc new x_offset
+                    let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
+                    camera.x_offset = -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
+
+                    // calc new y_offset
+                    let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
+                    camera.y_offset = -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
+                }
+            } else {
+                mouse_clicked_in_position = None;
+            }
 
         //<> render tile_viewer
 
-        clear_background(GRAY);
+            clear_background(GRAY);
 
-        // tile_viewer.recieve_retrieved_tiles();
-        tile_viewer.clean_tile_texture_cache(&camera);
-        tile_viewer.cache_desired_textures(&camera);
-        let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera);
-        tile_viewer.retrieve_tiles_till_out_of_work_or_time(
-            &camera,
-            frame_start_time,
-            frame_time_limit,
-        );
+            // tile_viewer.recieve_retrieved_tiles();
+            tile_viewer.clean_tile_texture_cache(&camera);
+            tile_viewer.cache_desired_textures(&camera);
+            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera);
+            tile_viewer.retrieve_tiles_till_out_of_work_or_time(
+                &camera,
+                frame_start_time,
+                frame_time_limit,
+            );
 
-        //> draw text in top left corner
-        let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
+        //<> draw text in top left corner
+            let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
 
-        draw_text(
-            &("fps: ".to_owned() + &get_fps().to_string()),
-            20.0,
-            20.0,
-            30.0,
-            WHITE,
-        );
+            draw_text(
+                &("fps: ".to_owned() + &get_fps().to_string()),
+                20.0,
+                20.0,
+                30.0,
+                WHITE,
+            );
 
-        draw_text(
-            &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
-            20.0,
-            40.0,
-            30.0,
-            WHITE,
-        );
+            draw_text(
+                &("zoom_multiplier: ".to_owned() + &camera.zoom_multiplier.to_string()),
+                20.0,
+                40.0,
+                30.0,
+                WHITE,
+            );
 
-        draw_text(
-            &("LOD: ".to_owned() + &lod.to_string()),
-            20.0,
-            60.0,
-            30.0,
-            WHITE,
-        );
+            draw_text(
+                &("LOD: ".to_owned() + &lod.to_string()),
+                20.0,
+                60.0,
+                30.0,
+                WHITE,
+            );
 
-        draw_text(
-            &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
-            20.0,
-            80.0,
-            30.0,
-            WHITE,
-        );
+            draw_text(
+                &("rendered_tiles: ".to_owned() + &num_rendered_tiles.to_string()),
+                20.0,
+                80.0,
+                30.0,
+                WHITE,
+            );
 
-        let mouse = mouse_position();
-        let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
-        draw_text(
-            &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
-            20.0,
-            100.0,
-            30.0,
-            WHITE,
-        );
+            let mouse = mouse_position();
+            let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
+            draw_text(
+                &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
+                20.0,
+                100.0,
+                30.0,
+                WHITE,
+            );
 
-        draw_text(
-            &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
-            20.0,
-            120.0,
-            30.0,
-            WHITE,
-        );
+            draw_text(
+                &("mouse.y: ".to_owned() + &mouse_coord.1.to_string()),
+                20.0,
+                120.0,
+                30.0,
+                WHITE,
+            );
         //<
 
         next_frame().await
