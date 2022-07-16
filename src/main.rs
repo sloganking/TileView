@@ -290,7 +290,6 @@ struct CameraSettings {
 }
 
 struct TileViewer {
-    tile_dir: String,
     texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>>,
     retriving_pools: HashMap<(i32, i32, usize), LocalPool>,
     tile_dimensions: (f32, f32),
@@ -302,19 +301,18 @@ struct TileViewer {
 }
 
 impl TileViewer {
-    async fn new(dir: &str) -> Self {
+    async fn new(tile_dir: &str) -> Self {
         let (results_tx, results_rx): (
             std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>,
             std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>,
         ) = mpsc::channel();
         TileViewer {
-            tile_dir: dir.to_owned(),
             texture_cache: HashMap::new(),
             retriving_pools: HashMap::new(),
             tile_dimensions: {
                 // return dimentions of a random tile in lod 0
                 let mut tile_dimensions: (f32, f32) = (0., 0.);
-                let files = get_files_in_dir(&(dir.to_owned() + &0.to_string()), "").unwrap();
+                let files = get_files_in_dir(&(tile_dir.to_owned() + &0.to_string()), "").unwrap();
                 let initial_texture: Texture2D =
                     load_texture(files[0].to_str().unwrap()).await.unwrap();
                 tile_dimensions.0 = initial_texture.width();
@@ -323,7 +321,7 @@ impl TileViewer {
 
                 tile_dimensions
             },
-            max_lod: max_lod_in_tile_dir(dir),
+            max_lod: max_lod_in_tile_dir(tile_dir),
             results_tx,
             results_rx,
             rolling_decode_buffer: VecDeque::new(),
@@ -332,7 +330,7 @@ impl TileViewer {
     }
 
     /// Queues tiles from the current LOD that should be rendered on screen, for being retrieved and stored in cache, if they are not already.
-    fn cache_desired_textures(&mut self, camera: &CameraSettings) {
+    fn queue_desired_textures(&mut self, camera: &CameraSettings) {
         let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
         let (top_left_sector, bottom_right_sector) =
             get_screen_sectors(&camera, self.tile_dimensions, lod);
@@ -482,7 +480,7 @@ impl TileViewer {
     //     }
     // }
 
-    /// Retrieves tiles requested by cache_desired_textures() and stores them in texture_cache
+    /// Retrieves tiles requested by queue_desired_textures() and stores them in texture_cache
     ///
     /// Always retrieves at least one tile, assuming at least one needs to be retrieved.
     ///
@@ -708,7 +706,7 @@ async fn main() {
 
             // tile_viewer.recieve_retrieved_tiles();
             tile_viewer.clean_tile_texture_cache(&camera);
-            tile_viewer.cache_desired_textures(&camera);
+            tile_viewer.queue_desired_textures(&camera);
             let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera);
             tile_viewer.retrieve_tiles_till_out_of_work_or_time(
                 &camera,
