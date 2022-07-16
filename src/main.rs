@@ -18,12 +18,6 @@ use macroquad::prelude::*;
 //     min_z: i32,
 // }
 
-// struct FilenameAndNumbers {
-//     file_name: PathBuf,
-//     x: i32,
-//     z: i32,
-// }
-
 /// Returns a list of all files in a directory and it's subdirectories
 fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobError> {
     //> get list of all files and dirs in path, using glob
@@ -68,33 +62,35 @@ fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     (x_out, y_out)
 }
 
-// struct Rectangle {
-//     x: f32,
-//     y: f32,
-//     width: f32,
-//     height: f32,
-// }
+//> rectangle
+    // struct Rectangle {
+    //     x: f32,
+    //     y: f32,
+    //     width: f32,
+    //     height: f32,
+    // }
 
-// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-//     (value >= min) && (value <= max)
-// }
+    // fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+    //     (value >= min) && (value <= max)
+    // }
 
-// /// returns true if two rectangles overlap
-// ///
-// /// Resources:
-// ///
-// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-// ///
-// /// https://silentmatt.com/rectangle-intersection/
-// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-//     let x_overlap =
-//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+    // /// returns true if two rectangles overlap
+    // ///
+    // /// Resources:
+    // ///
+    // /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+    // ///
+    // /// https://silentmatt.com/rectangle-intersection/
+    // fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+    //     let x_overlap =
+    //         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
 
-//     let y_overlap =
-//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+    //     let y_overlap =
+    //         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
-//     x_overlap && y_overlap
-// }
+    //     x_overlap && y_overlap
+    // }
+//<
 
 fn sector_at_screen_pos(
     x: f32,
@@ -125,7 +121,7 @@ fn sector_at_screen_pos(
     (screen_point_sector_x, screen_point_sector_y)
 }
 
-/// stores texture in hdd_texture_cache. Does not check if it is already there.
+/// stores texture in texture_cache. Does not check if it is already there.
 async fn cache_texture(
     tile_data: (i32, i32, usize),
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
@@ -183,7 +179,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
 
 /// determine if current desired view is fully cached and ready to be rendered
 fn current_view_cached(
-    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
+    texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
     render_lod: usize,
     camera: &CameraSettings,
     tile_dimensions: (f32, f32),
@@ -196,7 +192,7 @@ fn current_view_cached(
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
         for sector_x in top_left_sector.0..=bottom_right_sector.0 {
             // render texture
-            if hdd_texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
+            if texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
                 fully_rendered = false;
                 break;
             }
@@ -207,119 +203,6 @@ fn current_view_cached(
     }
 
     fully_rendered
-}
-
-/// renders image tiles and returns how many are currently being rendered
-fn render_screen_tiles(
-    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
-    tile_dimensions: (f32, f32),
-    camera: &CameraSettings,
-    max_lod: usize,
-) -> u32 {
-    let mut num_rendered_tiles: u32 = 0;
-    let two: f32 = 2.0;
-
-    for render_lod in (0..=max_lod).rev() {
-        // determine what sectors we need to render
-        let (top_left_sector, bottom_right_sector) =
-            get_screen_sectors(&camera, tile_dimensions, render_lod);
-
-        // for all cached tiles
-        for ((tile_x, tile_y, tile_lod), texture_option) in hdd_texture_cache {
-            // if correct LOD
-            if *tile_lod == render_lod {
-                // if tile on screen
-                if *tile_x >= top_left_sector.0
-                    && *tile_y >= top_left_sector.1
-                    && *tile_x <= bottom_right_sector.0
-                    && *tile_y <= bottom_right_sector.1
-                {
-                    // if there's a texture to be rendered
-                    if let Some(texture) = texture_option {
-                        let tile_world_width =
-                            tile_dimensions.0 as f32 * two.powf(render_lod as f32);
-                        let tile_world_height =
-                            tile_dimensions.1 as f32 * two.powf(render_lod as f32);
-
-                        let tile_screen_width = tile_world_width * camera.zoom_multiplier;
-                        let tile_screen_height = tile_world_height * camera.zoom_multiplier;
-
-                        let tile_world_x = tile_world_width * *tile_x as f32;
-                        let tile_world_y = tile_world_height * *tile_y as f32;
-
-                        let (tile_screen_x, tile_screen_y) =
-                            coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
-
-                        let params = DrawTextureParams {
-                            dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
-                            source: None,
-                            rotation: 0.,
-                            flip_x: false,
-                            flip_y: false,
-                            pivot: None,
-                        };
-
-                        draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
-                        num_rendered_tiles += 1;
-                    }
-                }
-            }
-        }
-    }
-    num_rendered_tiles
-}
-
-fn clean_tile_texture_cache(
-    hdd_texture_cache: &mut HashMap<(i32, i32, usize), Option<Texture2D>>,
-    tile_dimensions: (f32, f32),
-    camera: &CameraSettings,
-    lod: usize,
-) {
-    // determine what sectors we need to render
-    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
-
-    //> remove tiles out of view
-
-        let mut to_remove = Vec::new();
-        for (tile_data, _) in hdd_texture_cache.iter() {
-            if !tile_on_screen(*tile_data, &camera, tile_dimensions) {
-                to_remove.push(*tile_data);
-            }
-        }
-
-        // remove tiles
-        for (sec_x, sec_y, sec_lod) in to_remove {
-            if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                texture.delete();
-            }
-        }
-
-    //<> determine if current desired view is fully rendered
-        let fully_rendered = current_view_cached(&hdd_texture_cache, lod, &camera, tile_dimensions);
-
-    //<> possibly remove tiles in wrong lod
-
-        // clear texture cache only if fully rendering what we want to be
-        if fully_rendered {
-            // find tiles to remove
-            let mut to_remove = Vec::new();
-            for ((sec_x, sec_y, sec_lod), _) in hdd_texture_cache.iter() {
-                if !((lod == *sec_lod)
-                    && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
-                    && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
-                {
-                    to_remove.push((*sec_x, *sec_y, *sec_lod));
-                }
-            }
-
-            // remove tiles
-            for (sec_x, sec_y, sec_lod) in to_remove {
-                if let Some(texture) = hdd_texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
-                    texture.delete();
-                }
-            }
-        }
-    //<
 }
 
 fn get_screen_sectors(
@@ -400,40 +283,277 @@ async fn infer_target_fps() -> i32 {
     target_fps
 }
 
-fn cache_desired_textures(
-    hdd_texture_cache: &HashMap<(i32, i32, usize), Option<Texture2D>>,
-    retriving_pools: &mut HashMap<(i32, i32, usize), LocalPool>,
-    camera: &CameraSettings,
-    tile_dimensions: (f32, f32),
-    lod: usize,
-    results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
-) {
-    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
-
-    // for all sectors to render
-    for sector_y in top_left_sector.1..=bottom_right_sector.1 {
-        for sector_x in top_left_sector.0..=bottom_right_sector.0 {
-            // if tile not in cache
-            if let None = hdd_texture_cache.get(&(sector_x, sector_y, lod)) {
-                if let None = retriving_pools.get(&(sector_x, sector_y, lod)) {
-                    let f = cache_texture((sector_x, sector_y, lod), results_tx.clone());
-
-                    // create LocalPool with one task inside
-                    let pool = LocalPool::new();
-                    let spawner = pool.spawner();
-                    spawner.spawn_local(f).unwrap();
-
-                    retriving_pools.insert((sector_x, sector_y, lod), pool);
-                }
-            }
-        }
-    }
-}
-
 struct CameraSettings {
     x_offset: f32,
     y_offset: f32,
     zoom_multiplier: f32,
+}
+
+struct TileViewer {
+    texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>>,
+    retriving_pools: HashMap<(i32, i32, usize), LocalPool>,
+    tile_dimensions: (f32, f32),
+    max_lod: usize,
+    results_tx: std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>,
+    results_rx: std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>,
+    rolling_decode_buffer: VecDeque<f64>,
+    rolling_average_decode_time: f64,
+}
+
+impl TileViewer {
+    async fn new(tile_dir: &str) -> Self {
+        let (results_tx, results_rx): (
+            std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>,
+            std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>,
+        ) = mpsc::channel();
+        TileViewer {
+            texture_cache: HashMap::new(),
+            retriving_pools: HashMap::new(),
+            tile_dimensions: {
+                // return dimentions of a random tile in lod 0
+                let mut tile_dimensions: (f32, f32) = (0., 0.);
+                let files = get_files_in_dir(&(tile_dir.to_owned() + &0.to_string()), "").unwrap();
+                let initial_texture: Texture2D =
+                    load_texture(files[0].to_str().unwrap()).await.unwrap();
+                tile_dimensions.0 = initial_texture.width();
+                tile_dimensions.1 = initial_texture.height();
+                initial_texture.delete();
+
+                tile_dimensions
+            },
+            max_lod: max_lod_in_tile_dir(tile_dir),
+            results_tx,
+            results_rx,
+            rolling_decode_buffer: VecDeque::new(),
+            rolling_average_decode_time: 0.0,
+        }
+    }
+
+    /// Queues tiles from the current LOD that should be rendered on screen, for being retrieved and stored in cache, if they are not already.
+    fn queue_desired_textures(&mut self, camera: &CameraSettings) {
+        let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
+        let (top_left_sector, bottom_right_sector) =
+            get_screen_sectors(&camera, self.tile_dimensions, lod);
+
+        // for all sectors to render
+        for sector_y in top_left_sector.1..=bottom_right_sector.1 {
+            for sector_x in top_left_sector.0..=bottom_right_sector.0 {
+                // if tile not in cache
+                if let None = self.texture_cache.get(&(sector_x, sector_y, lod)) {
+                    // if not actively retrieving
+                    if let None = self.retriving_pools.get(&(sector_x, sector_y, lod)) {
+                        let f = cache_texture((sector_x, sector_y, lod), self.results_tx.clone());
+
+                        // create LocalPool with one task inside
+                        let pool = LocalPool::new();
+                        let spawner = pool.spawner();
+                        spawner.spawn_local(f).unwrap();
+
+                        self.retriving_pools.insert((sector_x, sector_y, lod), pool);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Removes unused tiles from texture_cache
+    ///
+    /// Removes any tiles in cache that are not visible on screen.
+    ///
+    /// Removes all tiles not in the desired LOD, only when the tile cache contains a full screen of tiles from the desired LOD.
+    fn clean_tile_texture_cache(&mut self, camera: &CameraSettings) {
+        let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
+
+        // determine what sectors we need to render
+        let (top_left_sector, bottom_right_sector) =
+            get_screen_sectors(&camera, self.tile_dimensions, lod);
+
+        //> remove tiles out of view
+
+            let mut to_remove = Vec::new();
+            for (tile_data, _) in self.texture_cache.iter() {
+                if !tile_on_screen(*tile_data, &camera, self.tile_dimensions) {
+                    to_remove.push(*tile_data);
+                }
+            }
+
+            // remove tiles
+            for (sec_x, sec_y, sec_lod) in to_remove {
+                if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                    texture.delete();
+                }
+            }
+
+        //<> determine if current desired view is fully rendered
+            let fully_rendered =
+                current_view_cached(&self.texture_cache, lod, &camera, self.tile_dimensions);
+
+        //<> possibly remove tiles in wrong lod
+
+            // clear texture cache only if fully rendering what we want to be
+            if fully_rendered {
+                // find tiles to remove
+                let mut to_remove = Vec::new();
+                for ((sec_x, sec_y, sec_lod), _) in self.texture_cache.iter() {
+                    if !((lod == *sec_lod)
+                        && (*sec_y >= top_left_sector.1 && *sec_y <= bottom_right_sector.1)
+                        && (*sec_x >= top_left_sector.0 && *sec_x <= bottom_right_sector.0))
+                    {
+                        to_remove.push((*sec_x, *sec_y, *sec_lod));
+                    }
+                }
+
+                // remove tiles
+                for (sec_x, sec_y, sec_lod) in to_remove {
+                    if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap()
+                    {
+                        texture.delete();
+                    }
+                }
+            }
+        //<
+    }
+
+    /// Renders image tiles and returns how many are currently being rendered
+    ///
+    /// Renders all image tiles in tile cache that are on screen. Including tiles with an LOD different from the current one.
+    /// Larger LOD tiles are rendered first, so as to fill in holes left by smaller LOD tiles that have not been cached yet.
+    fn render_screen_tiles(&self, camera: &CameraSettings) -> u32 {
+        let mut num_rendered_tiles: u32 = 0;
+        let two: f32 = 2.0;
+
+        for render_lod in (0..=self.max_lod).rev() {
+            // determine what sectors we need to render
+            let (top_left_sector, bottom_right_sector) =
+                get_screen_sectors(&camera, self.tile_dimensions, render_lod);
+
+            // for all cached tiles
+            for ((tile_x, tile_y, tile_lod), texture_option) in &self.texture_cache {
+                // if correct LOD
+                if *tile_lod == render_lod {
+                    // if tile on screen
+                    if *tile_x >= top_left_sector.0
+                        && *tile_y >= top_left_sector.1
+                        && *tile_x <= bottom_right_sector.0
+                        && *tile_y <= bottom_right_sector.1
+                    {
+                        // if there's a texture to be rendered
+                        if let Some(texture) = texture_option {
+                            let tile_world_width =
+                                self.tile_dimensions.0 as f32 * two.powf(render_lod as f32);
+                            let tile_world_height =
+                                self.tile_dimensions.1 as f32 * two.powf(render_lod as f32);
+
+                            let tile_screen_width = tile_world_width * camera.zoom_multiplier;
+                            let tile_screen_height = tile_world_height * camera.zoom_multiplier;
+
+                            let tile_world_x = tile_world_width * *tile_x as f32;
+                            let tile_world_y = tile_world_height * *tile_y as f32;
+
+                            let (tile_screen_x, tile_screen_y) =
+                                coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
+
+                            let params = DrawTextureParams {
+                                dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
+                                source: None,
+                                rotation: 0.,
+                                flip_x: false,
+                                flip_y: false,
+                                pivot: None,
+                            };
+
+                            draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+                            num_rendered_tiles += 1;
+                        }
+                    }
+                }
+            }
+        }
+        num_rendered_tiles
+    }
+
+    // fn recieve_retrieved_tiles(&mut self) {
+    //     // receive any retrieved tiles
+    //     for (details, texture_option) in self.results_rx.try_iter() {
+    //         self.texture_cache.insert(details, texture_option);
+    //         self.retriving_pools.remove(&details);
+    //     }
+    // }
+
+    /// Retrieves tiles requested by queue_desired_textures() and stores them in texture_cache
+    ///
+    /// Always retrieves at least one tile, assuming at least one needs to be retrieved.
+    ///
+    /// Retrieves more tiles if there is time to do so before the next frame needs to be rendered.
+    fn retrieve_tiles_till_out_of_work_or_time(
+        &mut self,
+        camera: &CameraSettings,
+        frame_start_time: f64,
+        frame_time_limit: f64,
+    ) {
+        let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
+
+        // stop retrieving any tiles that are not current desired lod
+        self.retriving_pools
+            .retain(|(_, _, tile_lod), _| *tile_lod == lod);
+
+        // possibly prepair one tile
+        let mut finished_tiles = Vec::new();
+        let mut textures_decoded = 0;
+        for ((tile_x, tile_y, tile_lod), pool) in &mut self.retriving_pools {
+            // stop if out of time. But only if have decoded at least one texture
+            if textures_decoded != 0 {
+                let time_since_last_frame = get_time() - frame_start_time;
+                if time_since_last_frame + self.rolling_average_decode_time > frame_time_limit * 0.7
+                {
+                    break;
+                }
+            }
+
+            if *tile_lod == lod {
+                let tile_decode_start_time = get_time();
+                if pool.try_run_one() {
+                    // don't break unless texture was sent back
+                    if let Ok((details, texture_option)) = self.results_rx.try_recv() {
+                        // mark for removal from self.retriving_pools
+                        finished_tiles.push((*tile_x, *tile_y, *tile_lod));
+
+                        // store in
+                        self.texture_cache.insert(details, texture_option);
+
+                        if texture_option != None {
+                            textures_decoded += 1;
+
+                            let last_time_to_decode = get_time() - tile_decode_start_time;
+
+                            self.rolling_average_decode_time = new_rolling_average(
+                                last_time_to_decode,
+                                &mut self.rolling_decode_buffer,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // remove any finished tiles
+        for (tile_x, tile_y, tile_lod) in finished_tiles {
+            self.retriving_pools.remove(&(tile_x, tile_y, tile_lod));
+        }
+    }
+}
+
+// finds max_lod in a directory containing tile lods
+fn max_lod_in_tile_dir(dir: &str) -> usize {
+    let mut max_lod: usize = 0;
+    for x in 0.. {
+        if PathBuf::from(dir.to_owned() + &x.to_string()).is_dir() {
+            max_lod = x;
+        } else {
+            break;
+        }
+    }
+    max_lod
 }
 
 #[macroquad::main("Map Renderer")]
@@ -447,14 +567,7 @@ async fn main() {
     initial_texture.delete();
 
     // get max_lod
-    let mut max_lod: usize = 0;
-    for x in 0.. {
-        if PathBuf::from(TILE_DIR.to_owned() + &x.to_string()).is_dir() {
-            max_lod = x;
-        } else {
-            break;
-        }
-    }
+    let max_lod = max_lod_in_tile_dir(TILE_DIR);
 
     let two: f32 = 2.0;
     let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
@@ -469,31 +582,13 @@ async fn main() {
     let mut clicked_in_x_offset: f32 = 0.0;
     let mut clicked_in_y_offset: f32 = 0.0;
 
-    // stores cached textures
-    let mut hdd_texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>> = HashMap::new();
-
-    use futures::executor::LocalPool;
-    use futures::task::LocalSpawnExt;
-
-    let (results_tx, results_rx) = mpsc::channel();
-
-    let mut retriving_pools: HashMap<(i32, i32, usize), LocalPool> = HashMap::new();
-
     let target_fps = infer_target_fps().await;
     let frame_time_limit = 1. / target_fps as f64;
 
-    let mut rolling_decode_buffer: VecDeque<f64> = VecDeque::new();
-    let mut rolling_average_decode_time: f64 = 0.0;
+    let mut tile_viewer = TileViewer::new(TILE_DIR).await;
 
     loop {
         let frame_start_time = get_time();
-
-        // clear_background(GRAY);
-
-        // draw_line(40.0, 40.0, 100.0, 200.0, 15.0, BLUE);
-        // draw_rectangle(screen_width() / 2.0 - 60.0, 100.0, 120.0, 60.0, GREEN);
-        // draw_circle(screen_width() - 30.0, screen_height() - 30.0, 15.0, YELLOW);
-        // draw_text("IT WORKS!", 20.0, 20.0, 30.0, DARKGRAY);
 
         //> react to key presses
             let fps_speed_multiplier = 144. / target_fps as f32;
@@ -605,37 +700,23 @@ async fn main() {
                 mouse_clicked_in_position = None;
             }
 
-        //<
+        //<> render tile_viewer
 
-        let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
+            clear_background(GRAY);
 
-        // receive any retrieved tiles
-        for (details, texture_option) in results_rx.try_iter() {
-            hdd_texture_cache.insert(details, texture_option);
-            retriving_pools.remove(&details);
-        }
-
-        // clean up any unrendered textures
-        clean_tile_texture_cache(&mut &mut hdd_texture_cache, tile_dimensions, &camera, lod);
-
-        //> cache desired textures
-            cache_desired_textures(
-                &hdd_texture_cache,
-                &mut retriving_pools,
+            // tile_viewer.recieve_retrieved_tiles();
+            tile_viewer.clean_tile_texture_cache(&camera);
+            tile_viewer.queue_desired_textures(&camera);
+            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera);
+            tile_viewer.retrieve_tiles_till_out_of_work_or_time(
                 &camera,
-                tile_dimensions,
-                lod,
-                results_tx.clone(),
+                frame_start_time,
+                frame_time_limit,
             );
 
-        //<> draw all textures
-            let num_rendered_tiles =
-                render_screen_tiles(&hdd_texture_cache, tile_dimensions, &camera, max_lod);
-        //<
+        //<> draw text in top left corner
+            let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
 
-        draw_tile_lines(&camera, lod, tile_dimensions);
-
-        //> draw text in top left corner
             draw_text(
                 &("fps: ".to_owned() + &get_fps().to_string()),
                 20.0,
@@ -685,60 +766,6 @@ async fn main() {
                 30.0,
                 WHITE,
             );
-
-        //<> retrieve new tiles until out of work or out of time
-
-            // stop retrieving any tiles that are not current desired lod
-            retriving_pools.retain(|(_, _, tile_lod), _| *tile_lod == lod);
-
-            // possibly prepair one tile
-            let mut finished_tiles = Vec::new();
-            let mut textures_decoded = 0;
-            for ((tile_x, tile_y, tile_lod), pool) in &mut retriving_pools {
-                // stop if out of time. But only if have decoded at least one texture
-                if textures_decoded != 0 {
-                    let time_since_last_frame = get_time() - frame_start_time;
-                    if time_since_last_frame + rolling_average_decode_time > frame_time_limit * 0.7 {
-                        break;
-                    }
-                }
-
-                if *tile_lod == lod {
-                    let tile_decode_start_time = get_time();
-                    if pool.try_run_one() {
-                        // don't break unless texture was sent back
-                        if let Ok((details, texture_option)) = results_rx.try_recv() {
-                            // mark for removal from retriving_pools
-                            finished_tiles.push((*tile_x, *tile_y, *tile_lod));
-
-                            // store in
-                            hdd_texture_cache.insert(details, texture_option);
-
-                            if texture_option != None {
-                                textures_decoded += 1;
-
-                                let last_time_to_decode = get_time() - tile_decode_start_time;
-
-                                rolling_average_decode_time = new_rolling_average(
-                                    last_time_to_decode,
-                                    &mut rolling_decode_buffer,
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-
-            // if textures_decoded > 0{
-            //     println!("textures_decoded: {}",textures_decoded);
-            // }
-
-            // remove any finished tiles
-            for (tile_x, tile_y, tile_lod) in finished_tiles {
-                retriving_pools.remove(&(tile_x, tile_y, tile_lod));
-            }
-
-            // println!("retriving_pools.len(): {}", retriving_pools.len());
         //<
 
         next_frame().await
