@@ -463,6 +463,18 @@ impl TileViewer {
                             };
 
                             draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+
+                            //> draw red box around newly rendered tile
+                                // top
+                                draw_line(tile_screen_x, tile_screen_y, tile_screen_x+tile_screen_width, tile_screen_y, 3.0, RED);
+                                // bottom
+                                draw_line(tile_screen_x, tile_screen_y+tile_screen_height, tile_screen_x+tile_screen_width, tile_screen_y+tile_screen_height, 3.0, RED);
+                                // left
+                                draw_line(tile_screen_x, tile_screen_y, tile_screen_x, tile_screen_y+tile_screen_height, 3.0, RED);
+                                // right
+                                draw_line(tile_screen_x+tile_screen_width, tile_screen_y, tile_screen_x+tile_screen_width, tile_screen_y+tile_screen_height, 3.0, RED);
+                            //<
+
                             num_rendered_tiles += 1;
                         }
                     }
@@ -716,7 +728,6 @@ async fn main() {
 
         //<> draw text in top left corner
             let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
-
             draw_text(
                 &("fps: ".to_owned() + &get_fps().to_string()),
                 20.0,
