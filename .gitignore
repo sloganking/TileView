@@ -21,7 +21,10 @@ Cargo.lock
 input/
 
 *.png
+*.jpg
 
 .vscode/
 
 *.json
+
+tile_images/
