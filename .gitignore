@@ -25,3 +25,5 @@ input/
 .vscode/
 
 *.json
+
+tile_images/
