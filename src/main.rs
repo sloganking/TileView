@@ -47,7 +47,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/terrain/";
+const TILE_DIR: &str = "./tile_images/world/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -238,7 +238,7 @@ fn new_rolling_average(new_value: f64, rolling_decode_buffer: &mut VecDeque<f64>
 }
 
 /// draws a grid over the screen that outlines the size of tiles being currently rendered
-fn draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
+fn _draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
     let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
     let two: f32 = 2.0;
 
@@ -418,7 +418,7 @@ impl TileViewer {
     ///
     /// Renders all image tiles in tile cache that are on screen. Including tiles with an LOD different from the current one.
     /// Larger LOD tiles are rendered first, so as to fill in holes left by smaller LOD tiles that have not been cached yet.
-    fn render_screen_tiles(&self, camera: &CameraSettings) -> u32 {
+    fn render_screen_tiles(&self, camera: &CameraSettings, tile_boxes: bool) -> u32 {
         let mut num_rendered_tiles: u32 = 0;
         let two: f32 = 2.0;
 
@@ -463,6 +463,48 @@ impl TileViewer {
                             };
 
                             draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
+
+                            if tile_boxes {
+                                // draw red box around newly rendered tile
+
+                                // top
+                                draw_line(
+                                    tile_screen_x,
+                                    tile_screen_y,
+                                    tile_screen_x + tile_screen_width,
+                                    tile_screen_y,
+                                    3.0,
+                                    RED,
+                                );
+                                // bottom
+                                draw_line(
+                                    tile_screen_x,
+                                    tile_screen_y + tile_screen_height,
+                                    tile_screen_x + tile_screen_width,
+                                    tile_screen_y + tile_screen_height,
+                                    3.0,
+                                    RED,
+                                );
+                                // left
+                                draw_line(
+                                    tile_screen_x,
+                                    tile_screen_y,
+                                    tile_screen_x,
+                                    tile_screen_y + tile_screen_height,
+                                    3.0,
+                                    RED,
+                                );
+                                // right
+                                draw_line(
+                                    tile_screen_x + tile_screen_width,
+                                    tile_screen_y,
+                                    tile_screen_x + tile_screen_width,
+                                    tile_screen_y + tile_screen_height,
+                                    3.0,
+                                    RED,
+                                );
+                            }
+
                             num_rendered_tiles += 1;
                         }
                     }
@@ -707,7 +749,7 @@ async fn main() {
             // tile_viewer.recieve_retrieved_tiles();
             tile_viewer.clean_tile_texture_cache(&camera);
             tile_viewer.queue_desired_textures(&camera);
-            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera);
+            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera, false);
             tile_viewer.retrieve_tiles_till_out_of_work_or_time(
                 &camera,
                 frame_start_time,
@@ -716,7 +758,6 @@ async fn main() {
 
         //<> draw text in top left corner
             let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
-
             draw_text(
                 &("fps: ".to_owned() + &get_fps().to_string()),
                 20.0,
