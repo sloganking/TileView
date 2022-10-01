@@ -51,7 +51,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 }
 
 
-const TILE_DIR: &str = "./tile_images/terrain/";
+const TILE_DIR: &str = "./tile_images/world1/terrain/";
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> Point {
     let out_x = screen_width() / 2. + ((camera.x_offset + x) * camera.zoom_multiplier);
