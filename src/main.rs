@@ -155,7 +155,7 @@ fn tile_on_screen(
     let (tile_x, tile_y, render_lod) = tile_data;
     // determine what sectors we need to render
     let (top_left_sector, bottom_right_sector) =
-        get_screen_sectors(&camera, tile_dimensions, render_lod);
+        get_screen_sectors(camera, tile_dimensions, render_lod);
 
     // if tile on screen
     tile_x >= top_left_sector.0
@@ -186,7 +186,7 @@ fn current_view_cached(
 ) -> bool {
     // determine what sectors we need to render
     let (top_left_sector, bottom_right_sector) =
-        get_screen_sectors(&camera, tile_dimensions, render_lod);
+        get_screen_sectors(camera, tile_dimensions, render_lod);
 
     let mut fully_rendered = true;
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
@@ -210,12 +210,12 @@ fn get_screen_sectors(
     tile_dimensions: (f32, f32),
     lod: usize,
 ) -> ((i32, i32), (i32, i32)) {
-    let top_left_sector = sector_at_screen_pos(0., 0., &camera, tile_dimensions, lod);
+    let top_left_sector = sector_at_screen_pos(0., 0., camera, tile_dimensions, lod);
 
     let bottom_right_sector = sector_at_screen_pos(
         screen_width(),
         screen_height(),
-        &camera,
+        camera,
         tile_dimensions,
         lod,
     );
@@ -234,12 +234,12 @@ fn new_rolling_average(new_value: f64, rolling_decode_buffer: &mut VecDeque<f64>
         rolling_decode_buffer.pop_front();
     }
 
-    average(&rolling_decode_buffer)
+    average(rolling_decode_buffer)
 }
 
 /// draws a grid over the screen that outlines the size of tiles being currently rendered
 fn _draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, f32)) {
-    let (top_left_sector, bottom_right_sector) = get_screen_sectors(&camera, tile_dimensions, lod);
+    let (top_left_sector, bottom_right_sector) = get_screen_sectors(camera, tile_dimensions, lod);
     let two: f32 = 2.0;
 
     // for all sectors to render
@@ -279,8 +279,7 @@ async fn infer_target_fps() -> i32 {
         fps_records.push(get_fps());
         next_frame().await;
     }
-    let target_fps = median(&mut fps_records);
-    target_fps
+    median(&mut fps_records)
 }
 
 struct CameraSettings {
@@ -333,15 +332,19 @@ impl TileViewer {
     fn queue_desired_textures(&mut self, camera: &CameraSettings) {
         let lod = lod_from_zoom(camera.zoom_multiplier, self.max_lod);
         let (top_left_sector, bottom_right_sector) =
-            get_screen_sectors(&camera, self.tile_dimensions, lod);
+            get_screen_sectors(camera, self.tile_dimensions, lod);
 
         // for all sectors to render
         for sector_y in top_left_sector.1..=bottom_right_sector.1 {
             for sector_x in top_left_sector.0..=bottom_right_sector.0 {
                 // if tile not in cache
-                if let None = self.texture_cache.get(&(sector_x, sector_y, lod)) {
+                if self.texture_cache.get(&(sector_x, sector_y, lod)).is_none() {
                     // if not actively retrieving
-                    if let None = self.retriving_pools.get(&(sector_x, sector_y, lod)) {
+                    if self
+                        .retriving_pools
+                        .get(&(sector_x, sector_y, lod))
+                        .is_none()
+                    {
                         let f = cache_texture((sector_x, sector_y, lod), self.results_tx.clone());
 
                         // create LocalPool with one task inside
@@ -366,13 +369,13 @@ impl TileViewer {
 
         // determine what sectors we need to render
         let (top_left_sector, bottom_right_sector) =
-            get_screen_sectors(&camera, self.tile_dimensions, lod);
+            get_screen_sectors(camera, self.tile_dimensions, lod);
 
         //> remove tiles out of view
 
             let mut to_remove = Vec::new();
             for (tile_data, _) in self.texture_cache.iter() {
-                if !tile_on_screen(*tile_data, &camera, self.tile_dimensions) {
+                if !tile_on_screen(*tile_data, camera, self.tile_dimensions) {
                     to_remove.push(*tile_data);
                 }
             }
@@ -386,7 +389,7 @@ impl TileViewer {
 
         //<> determine if current desired view is fully rendered
             let fully_rendered =
-                current_view_cached(&self.texture_cache, lod, &camera, self.tile_dimensions);
+                current_view_cached(&self.texture_cache, lod, camera, self.tile_dimensions);
 
         //<> possibly remove tiles in wrong lod
 
@@ -425,7 +428,7 @@ impl TileViewer {
         for render_lod in (0..=self.max_lod).rev() {
             // determine what sectors we need to render
             let (top_left_sector, bottom_right_sector) =
-                get_screen_sectors(&camera, self.tile_dimensions, render_lod);
+                get_screen_sectors(camera, self.tile_dimensions, render_lod);
 
             // for all cached tiles
             for ((tile_x, tile_y, tile_lod), texture_option) in &self.texture_cache {
@@ -451,7 +454,7 @@ impl TileViewer {
                             let tile_world_y = tile_world_height * *tile_y as f32;
 
                             let (tile_screen_x, tile_screen_y) =
-                                coord_to_screen_pos(tile_world_x, tile_world_y, &camera);
+                                coord_to_screen_pos(tile_world_x, tile_world_y, camera);
 
                             let params = DrawTextureParams {
                                 dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
