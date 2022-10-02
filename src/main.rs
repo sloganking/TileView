@@ -47,7 +47,7 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/world/terrain/";
+const TILE_DIR: &str = "./tile_images/world1/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -600,14 +600,6 @@ fn max_lod_in_tile_dir(dir: &str) -> usize {
 
 #[macroquad::main("Map Renderer")]
 async fn main() {
-    // get initial tile dimensions
-    let mut tile_dimensions: (f32, f32) = (0., 0.);
-    let files = get_files_in_dir(&(TILE_DIR.to_owned() + &0.to_string()), "").unwrap();
-    let initial_texture: Texture2D = load_texture(files[0].to_str().unwrap()).await.unwrap();
-    tile_dimensions.0 = initial_texture.width();
-    tile_dimensions.1 = initial_texture.height();
-    initial_texture.delete();
-
     // get max_lod
     let max_lod = max_lod_in_tile_dir(TILE_DIR);
 
