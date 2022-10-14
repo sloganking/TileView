@@ -57,8 +57,8 @@ fn world_pos_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32
 }
 
 fn screen_pos_to_world_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
-    let x_out = camera.x_offset + (x as f32 - screen_width() / 2.) / camera.zoom_multiplier;
-    let y_out = camera.y_offset + (y as f32 - screen_height() / 2.) / camera.zoom_multiplier;
+    let x_out = camera.x_offset + (x - screen_width() / 2.) / camera.zoom_multiplier;
+    let y_out = camera.y_offset + (y - screen_height() / 2.) / camera.zoom_multiplier;
     (x_out, y_out)
 }
 
