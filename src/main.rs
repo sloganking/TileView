@@ -50,13 +50,13 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
 const TILE_DIR: &str = "./tile_images/world1/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
-fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+fn world_pos_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((x - camera.x_offset) * camera.zoom_multiplier);
     let out_y = screen_height() / 2. + ((y - camera.y_offset) * camera.zoom_multiplier);
     (out_x, out_y)
 }
 
-fn screen_pos_to_coord(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
+fn screen_pos_to_world_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let x_out = camera.x_offset + (x as f32 - screen_width() / 2.) / camera.zoom_multiplier;
     let y_out = camera.y_offset + (y as f32 - screen_height() / 2.) / camera.zoom_multiplier;
     (x_out, y_out)
@@ -100,7 +100,7 @@ fn sector_at_screen_pos(
     lod: usize,
 ) -> (i32, i32) {
     let two: f32 = 2.0;
-    let screen_point_coords = screen_pos_to_coord(x, y, camera);
+    let screen_point_coords = screen_pos_to_world_pos(x, y, camera);
 
     // get sector x
     let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
@@ -454,7 +454,7 @@ impl TileViewer {
                             let tile_world_y = tile_world_height * *tile_y as f32;
 
                             let (tile_screen_x, tile_screen_y) =
-                                coord_to_screen_pos(tile_world_x, tile_world_y, camera);
+                                world_pos_to_screen_pos(tile_world_x, tile_world_y, camera);
 
                             let params = DrawTextureParams {
                                 dest_size: Some(vec2(tile_screen_width, tile_screen_height)),
@@ -674,7 +674,7 @@ async fn main() {
                 // record mouse positions
                 let mouse_screen_pos = mouse_position();
                 let mouse_world_pos =
-                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+                    screen_pos_to_world_pos(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
 
                 // zoom in
                 camera.zoom_multiplier += zoom_speed * 10.;
@@ -696,7 +696,7 @@ async fn main() {
                 // record mouse positions
                 let mouse_screen_pos = mouse_position();
                 let mouse_world_pos =
-                    screen_pos_to_coord(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
+                    screen_pos_to_world_pos(mouse_screen_pos.0, mouse_screen_pos.1, &camera);
 
                 // zoom out
                 camera.zoom_multiplier -= zoom_speed * 10.;
@@ -786,7 +786,7 @@ async fn main() {
             );
 
             let mouse = mouse_position();
-            let mouse_coord = screen_pos_to_coord(mouse.0, mouse.1, &camera);
+            let mouse_coord = screen_pos_to_world_pos(mouse.0, mouse.1, &camera);
             draw_text(
                 &("mouse.x: ".to_owned() + &mouse_coord.0.to_string()),
                 20.0,
