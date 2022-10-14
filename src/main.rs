@@ -288,23 +288,24 @@ struct CameraSettings {
     zoom_multiplier: f32,
 }
 
+// Channel types used to send results of retrieving tiles.
+type TileSender = std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>;
+type TileReceiver = std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>;
+
 struct TileViewer {
     texture_cache: HashMap<(i32, i32, usize), Option<Texture2D>>,
     retriving_pools: HashMap<(i32, i32, usize), LocalPool>,
     tile_dimensions: (f32, f32),
     max_lod: usize,
-    results_tx: std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>,
-    results_rx: std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>,
+    results_tx: TileSender,
+    results_rx: TileReceiver,
     rolling_decode_buffer: VecDeque<f64>,
     rolling_average_decode_time: f64,
 }
 
 impl TileViewer {
     async fn new(tile_dir: &str) -> Self {
-        let (results_tx, results_rx): (
-            std::sync::mpsc::Sender<((i32, i32, usize), Option<Texture2D>)>,
-            std::sync::mpsc::Receiver<((i32, i32, usize), Option<Texture2D>)>,
-        ) = mpsc::channel();
+        let (results_tx, results_rx): (TileSender, TileReceiver) = mpsc::channel();
         TileViewer {
             texture_cache: HashMap::new(),
             retriving_pools: HashMap::new(),
