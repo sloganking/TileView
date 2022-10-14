@@ -51,8 +51,8 @@ const TILE_DIR: &str = "./tile_images/world1/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn coord_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
-    let out_x = screen_width() / 2. + ((-camera.x_offset + x) * camera.zoom_multiplier);
-    let out_y = screen_height() / 2. + ((-camera.y_offset + y) * camera.zoom_multiplier);
+    let out_x = screen_width() / 2. + ((x - camera.x_offset) * camera.zoom_multiplier);
+    let out_y = screen_height() / 2. + ((y - camera.y_offset) * camera.zoom_multiplier);
     (out_x, out_y)
 }
 
