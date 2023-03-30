@@ -2,6 +2,7 @@ use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use glob::{glob, GlobError};
 use std::collections::VecDeque;
+use std::fs;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -311,12 +312,15 @@ impl TileViewer {
             retriving_pools: HashMap::new(),
             tile_dimensions: {
                 // return dimentions of a random tile in lod 0
-                let mut tile_dimensions: (f32, f32) = (0., 0.);
-                let files = get_files_in_dir(&(tile_dir.to_owned() + &0.to_string()), "").unwrap();
-                let initial_texture: Texture2D =
-                    load_texture(files[0].to_str().unwrap()).await.unwrap();
-                tile_dimensions.0 = initial_texture.width();
-                tile_dimensions.1 = initial_texture.height();
+
+                // get a random tile from lod 0
+                let mut paths = fs::read_dir(&(tile_dir.to_owned() + &0.to_string())).unwrap();
+                let path = paths.nth(0).unwrap().unwrap().path();
+                let path_string = path.to_str().unwrap();
+                let initial_texture: Texture2D = load_texture(path_string).await.unwrap();
+
+                // get the dimensions of the tile before it is freed
+                let tile_dimensions = (initial_texture.width(), initial_texture.height());
                 initial_texture.delete();
 
                 tile_dimensions
