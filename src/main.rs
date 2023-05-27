@@ -4,6 +4,7 @@ use glob::{glob, GlobError};
 use macroquad::prelude::*;
 use std::collections::VecDeque;
 use std::fs;
+use std::path::Path;
 use std::{
     collections::HashMap,
     path::PathBuf,
@@ -14,9 +15,9 @@ use clap::Parser;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref TILE_DIR: String = {
+    static ref TILE_DIR: PathBuf = {
         let args = options::Args::parse();
-        args.image_path.into_os_string().into_string().unwrap()
+        args.image_path
     };
 }
 
@@ -137,21 +138,19 @@ async fn cache_texture(
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
-    let texture_dir = TILE_DIR.to_owned()
-        + &lod.to_string()
-        + "/"
-        + &sector_x.to_string()
-        + ","
-        + &sector_y.to_string()
-        + ".png";
+    let texture_dir = TILE_DIR
+        .to_path_buf()
+        .join(&lod.to_string())
+        .join(sector_x.to_string() + "," + &sector_y.to_string() + ".png");
 
-    let texture_option = match load_texture(&texture_dir).await {
-        Ok(texture) => {
-            texture.set_filter(FilterMode::Nearest);
-            Some(texture)
-        }
-        _ => None,
-    };
+    let texture_option =
+        match load_texture(&texture_dir.into_os_string().into_string().unwrap()).await {
+            Ok(texture) => {
+                texture.set_filter(FilterMode::Nearest);
+                Some(texture)
+            }
+            _ => None,
+        };
 
     results_tx.send((tile_data, texture_option)).unwrap();
 }
@@ -313,7 +312,7 @@ struct TileViewer {
 }
 
 impl TileViewer {
-    async fn new(tile_dir: &str) -> Self {
+    async fn new(tile_dir: &Path) -> Self {
         let (results_tx, results_rx): (TileSender, TileReceiver) = mpsc::channel();
         TileViewer {
             texture_cache: HashMap::new(),
@@ -322,7 +321,8 @@ impl TileViewer {
                 // return dimentions of a random tile in lod 0
 
                 // get a random tile from lod 0
-                let mut paths = fs::read_dir(&(tile_dir.to_owned() + &0.to_string())).unwrap();
+                let mut paths =
+                    fs::read_dir(&(tile_dir.to_path_buf().join(&0.to_string()))).unwrap();
                 let path = paths.nth(0).unwrap().unwrap().path();
                 let path_string = path.to_str().unwrap();
                 let initial_texture: Texture2D = load_texture(path_string).await.unwrap();
@@ -602,10 +602,10 @@ impl TileViewer {
 }
 
 // finds max_lod in a directory containing tile lods
-fn max_lod_in_tile_dir(dir: &str) -> usize {
+fn max_lod_in_tile_dir(dir: &Path) -> usize {
     let mut max_lod: usize = 0;
     for x in 0.. {
-        if PathBuf::from(dir.to_owned() + &x.to_string()).is_dir() {
+        if dir.to_path_buf().join(&x.to_string()).is_dir() {
             max_lod = x;
         } else {
             break;
