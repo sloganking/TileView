@@ -1,6 +1,5 @@
 use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
-use glob::{glob, GlobError};
 use macroquad::prelude::*;
 use std::collections::VecDeque;
 use std::fs;
@@ -29,34 +28,34 @@ lazy_static! {
 //     min_z: i32,
 // }
 
-/// Returns a list of all files in a directory and it's subdirectories
-fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobError> {
-    //> get list of all files and dirs in path, using glob
-        let mut paths = Vec::new();
+// /// Returns a list of all files in a directory and it's subdirectories
+// fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobError> {
+//     //> get list of all files and dirs in path, using glob
+//         let mut paths = Vec::new();
 
-        let mut potential_slash = "";
-        if PathBuf::from(path).is_dir() && !path.ends_with('/') {
-            potential_slash = "/";
-        }
+//         let mut potential_slash = "";
+//         if PathBuf::from(path).is_dir() && !path.ends_with('/') {
+//             potential_slash = "/";
+//         }
 
-        let search_params = String::from(path) + potential_slash + "**/*" + filetype;
+//         let search_params = String::from(path) + potential_slash + "**/*" + filetype;
 
-        for entry in glob(&search_params).expect("Failed to read glob pattern") {
-            match entry {
-                Ok(path) => {
-                    paths.push(path);
-                }
-                Err(e) => return Err(e),
-            }
-        }
+//         for entry in glob(&search_params).expect("Failed to read glob pattern") {
+//             match entry {
+//                 Ok(path) => {
+//                     paths.push(path);
+//                 }
+//                 Err(e) => return Err(e),
+//             }
+//         }
 
-    //<> filter out directories
-        let paths = paths.into_iter().filter(|e| e.is_file());
-    //<
+//     //<> filter out directories
+//         let paths = paths.into_iter().filter(|e| e.is_file());
+//     //<
 
-    let paths: Vec<PathBuf> = paths.into_iter().collect();
-    Ok(paths)
-}
+//     let paths: Vec<PathBuf> = paths.into_iter().collect();
+//     Ok(paths)
+// }
 
 const LOD_FUZZYNESS: f32 = 1.0;
 
@@ -618,7 +617,7 @@ fn max_lod_in_tile_dir(dir: &Path) -> usize {
 async fn main() {
     let _ = *TILE_DIR;
 
-    let args: options::Args = clap::Parser::parse();
+    // let args: options::Args = clap::Parser::parse();
 
     // get max_lod
     let max_lod = max_lod_in_tile_dir(&TILE_DIR);
