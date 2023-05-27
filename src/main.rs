@@ -1,6 +1,7 @@
 use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use glob::{glob, GlobError};
+use macroquad::prelude::*;
 use std::collections::VecDeque;
 use std::fs;
 use std::{
@@ -8,14 +9,9 @@ use std::{
     path::PathBuf,
     sync::mpsc::{self, Sender},
 };
-
-use macroquad::prelude::*;
-
 mod options;
-use lazy_static::lazy_static;
-
-use crate::options::Args;
 use clap::Parser;
+use lazy_static::lazy_static;
 
 lazy_static! {
     static ref TILE_DIR: String = {
