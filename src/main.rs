@@ -144,10 +144,7 @@ async fn cache_texture(
 
     let texture_option =
         match load_texture(&texture_dir.into_os_string().into_string().unwrap()).await {
-            Ok(texture) => {
-                texture.set_filter(FilterMode::Nearest);
-                Some(texture)
-            }
+            Ok(texture) => Some(texture),
             _ => None,
         };
 
@@ -476,6 +473,12 @@ impl TileViewer {
                                 flip_y: false,
                                 pivot: None,
                             };
+
+                            if camera.zoom_multiplier >= 1.0 {
+                                texture.set_filter(FilterMode::Nearest);
+                            } else {
+                                texture.set_filter(FilterMode::Linear);
+                            }
 
                             draw_texture_ex(*texture, tile_screen_x, tile_screen_y, WHITE, params);
 
