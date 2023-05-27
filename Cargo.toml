@@ -9,3 +9,5 @@ edition = "2021"
 macroquad = "0.3"
 glob = "0.3.0"
 futures = "0.3.21"
+clap = { version = "4.3.0", features = ["derive"] }
+lazy_static = "1.4.0"

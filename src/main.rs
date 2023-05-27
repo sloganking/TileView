@@ -11,6 +11,19 @@ use std::{
 
 use macroquad::prelude::*;
 
+mod options;
+use lazy_static::lazy_static;
+
+use crate::options::Args;
+use clap::Parser;
+
+lazy_static! {
+    static ref TILE_DIR: String = {
+        let args = options::Args::parse();
+        args.image_path.into_os_string().into_string().unwrap()
+    };
+}
+
 // #[derive(Debug)]
 // struct Bounds {
 //     max_x: i32,
@@ -48,7 +61,6 @@ fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobErro
     Ok(paths)
 }
 
-const TILE_DIR: &str = "./tile_images/world1/terrain/";
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn world_pos_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -608,8 +620,12 @@ fn max_lod_in_tile_dir(dir: &str) -> usize {
 
 #[macroquad::main("TileView")]
 async fn main() {
+    let _ = *TILE_DIR;
+
+    let args: options::Args = clap::Parser::parse();
+
     // get max_lod
-    let max_lod = max_lod_in_tile_dir(TILE_DIR);
+    let max_lod = max_lod_in_tile_dir(&TILE_DIR);
 
     let two: f32 = 2.0;
     let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
@@ -627,7 +643,7 @@ async fn main() {
     let target_fps = infer_target_fps().await;
     let frame_time_limit = 1. / target_fps as f64;
 
-    let mut tile_viewer = TileViewer::new(TILE_DIR).await;
+    let mut tile_viewer = TileViewer::new(&TILE_DIR).await;
 
     loop {
         let frame_start_time = get_time();
