@@ -606,7 +606,7 @@ fn max_lod_in_tile_dir(dir: &str) -> usize {
     max_lod
 }
 
-#[macroquad::main("Map Renderer")]
+#[macroquad::main("TileView")]
 async fn main() {
     // get max_lod
     let max_lod = max_lod_in_tile_dir(TILE_DIR);
