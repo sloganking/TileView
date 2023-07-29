@@ -573,13 +573,7 @@ async fn main() {
         )
     } else {
         let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
-
         fs::create_dir(&tmp_dir).unwrap();
-
-        // clean_dir(&gen_tiles_args.output);
-
-        // let mut new_gen_tiles_args = gen_tiles_args.clone();
-        // new_gen_tiles_args.output.push("0/");
 
         let mut output_dir = tmp_dir.clone();
         output_dir.push("0/");
