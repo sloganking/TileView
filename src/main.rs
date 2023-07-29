@@ -2,13 +2,16 @@ use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use macroquad::prelude::*;
 use std::collections::VecDeque;
-use std::fs;
 use std::path::Path;
 use std::{
     collections::HashMap,
     path::PathBuf,
     sync::mpsc::{self, Sender},
 };
+use std::{env, fs};
+use tempdir::TempDir;
+use tileproc::args::GenTilesArgs;
+use tileproc::tiler::{clean_dir, gen_tiles_to_dir, generate_lods};
 mod options;
 use clap::Parser;
 use lazy_static::lazy_static;
@@ -577,7 +580,36 @@ async fn main() {
     let target_fps = infer_target_fps().await;
     let frame_time_limit = 1. / target_fps as f64;
 
-    let mut tile_viewer = TileViewer::new(&TILE_DIR).await;
+    let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
+
+    let mut tile_viewer = if TILE_DIR.is_dir() {
+        TileViewer::new(&TILE_DIR).await
+    } else {
+        fs::create_dir(&tmp_dir).unwrap();
+
+        // clean_dir(&gen_tiles_args.output);
+
+        // let mut new_gen_tiles_args = gen_tiles_args.clone();
+        // new_gen_tiles_args.output.push("0/");
+
+        let mut output_dir = tmp_dir.clone();
+        output_dir.push("0/");
+
+        let tile_args = GenTilesArgs {
+            input: TILE_DIR.clone(),
+            output: output_dir,
+            tile_dimensions: 256,
+            x_offset: None,
+            y_offset: None,
+        };
+
+        gen_tiles_to_dir(&tile_args);
+
+        generate_lods(&tmp_dir);
+
+        TileViewer::new(&tmp_dir).await
+        // todo!()
+    };
 
     loop {
         let frame_start_time = get_time();
