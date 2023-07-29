@@ -68,12 +68,13 @@ fn sector_at_screen_pos(
 
 /// stores texture in texture_cache. Does not check if it is already there.
 async fn cache_texture(
+    tile_dir: PathBuf,
     tile_data: (i32, i32, usize),
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
-    let texture_dir = TILE_DIR
+    let texture_dir = tile_dir
         .to_path_buf()
         .join(&lod.to_string())
         .join(sector_x.to_string() + "," + &sector_y.to_string() + ".png");
@@ -241,6 +242,7 @@ struct TileViewer {
     results_rx: TileReceiver,
     rolling_decode_buffer: VecDeque<f64>,
     rolling_average_decode_time: f64,
+    tile_dir: PathBuf,
 }
 
 impl TileViewer {
@@ -270,6 +272,7 @@ impl TileViewer {
             results_rx,
             rolling_decode_buffer: VecDeque::new(),
             rolling_average_decode_time: 0.0,
+            tile_dir: tile_dir.to_path_buf(),
         }
     }
 
@@ -290,7 +293,11 @@ impl TileViewer {
                         .get(&(sector_x, sector_y, lod))
                         .is_none()
                     {
-                        let f = cache_texture((sector_x, sector_y, lod), self.results_tx.clone());
+                        let f = cache_texture(
+                            self.tile_dir.clone(),
+                            (sector_x, sector_y, lod),
+                            self.results_tx.clone(),
+                        );
 
                         // create LocalPool with one task inside
                         let pool = LocalPool::new();
