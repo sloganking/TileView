@@ -71,35 +71,35 @@ fn screen_pos_to_world_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32
     (x_out, y_out)
 }
 
-//> rectangle
-    // struct Rectangle {
-    //     x: f32,
-    //     y: f32,
-    //     width: f32,
-    //     height: f32,
-    // }
+// //> rectangle
+// struct Rectangle {
+//     x: f32,
+//     y: f32,
+//     width: f32,
+//     height: f32,
+// }
 
-    // fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-    //     (value >= min) && (value <= max)
-    // }
+// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
+//     (value >= min) && (value <= max)
+// }
 
-    // /// returns true if two rectangles overlap
-    // ///
-    // /// Resources:
-    // ///
-    // /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-    // ///
-    // /// https://silentmatt.com/rectangle-intersection/
-    // fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-    //     let x_overlap =
-    //         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
+// /// returns true if two rectangles overlap
+// ///
+// /// Resources:
+// ///
+// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
+// ///
+// /// https://silentmatt.com/rectangle-intersection/
+// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
+//     let x_overlap =
+//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
 
-    //     let y_overlap =
-    //         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
+//     let y_overlap =
+//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
 
-    //     x_overlap && y_overlap
-    // }
-//<
+//     x_overlap && y_overlap
+// }
+// //<
 
 fn sector_at_screen_pos(
     x: f32,
@@ -380,8 +380,8 @@ impl TileViewer {
         let (top_left_sector, bottom_right_sector) =
             get_screen_sectors(camera, self.tile_dimensions, lod);
 
-        //> remove tiles out of view
-
+        // remove tiles out of view
+        {
             let mut to_remove = Vec::new();
             for (tile_data, _) in self.texture_cache.iter() {
                 if !tile_on_screen(*tile_data, camera, self.tile_dimensions) {
@@ -391,17 +391,19 @@ impl TileViewer {
 
             // remove tiles
             for (sec_x, sec_y, sec_lod) in to_remove {
-                if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap() {
+                if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap()
+                {
                     texture.delete();
                 }
             }
+        }
 
-        //<> determine if current desired view is fully rendered
-            let fully_rendered =
-                current_view_cached(&self.texture_cache, lod, camera, self.tile_dimensions);
+        //determine if current desired view is fully rendered
+        let fully_rendered =
+            current_view_cached(&self.texture_cache, lod, camera, self.tile_dimensions);
 
-        //<> possibly remove tiles in wrong lod
-
+        // possibly remove tiles in wrong lod
+        {
             // clear texture cache only if fully rendering what we want to be
             if fully_rendered {
                 // find tiles to remove
@@ -417,13 +419,14 @@ impl TileViewer {
 
                 // remove tiles
                 for (sec_x, sec_y, sec_lod) in to_remove {
-                    if let Some(texture) = self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap()
+                    if let Some(texture) =
+                        self.texture_cache.remove(&(sec_x, sec_y, sec_lod)).unwrap()
                     {
                         texture.delete();
                     }
                 }
             }
-        //<
+        }
     }
 
     /// Renders image tiles and returns how many are currently being rendered
@@ -646,7 +649,8 @@ async fn main() {
     loop {
         let frame_start_time = get_time();
 
-        //> react to key presses
+        // react to key presses
+        {
             let fps_speed_multiplier = 144. / target_fps as f32;
             let speed = if is_key_down(KeyCode::LeftShift) {
                 20. / camera.zoom_multiplier * fps_speed_multiplier
@@ -746,18 +750,20 @@ async fn main() {
 
                     // calc new x_offset
                     let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
-                    camera.x_offset = -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
+                    camera.x_offset =
+                        -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
 
                     // calc new y_offset
                     let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
-                    camera.y_offset = -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
+                    camera.y_offset =
+                        -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
                 }
             } else {
                 mouse_clicked_in_position = None;
             }
-
-        //<> render tile_viewer
-
+        }
+        // render tile_viewer
+        let num_rendered_tiles = {
             clear_background(GRAY);
 
             // tile_viewer.recieve_retrieved_tiles();
@@ -769,8 +775,10 @@ async fn main() {
                 frame_start_time,
                 frame_time_limit,
             );
-
-        //<> draw text in top left corner
+            num_rendered_tiles
+        };
+        // draw text in top left corner
+        {
             let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
             draw_text(
                 &("fps: ".to_owned() + &get_fps().to_string()),
@@ -821,7 +829,7 @@ async fn main() {
                 30.0,
                 WHITE,
             );
-        //<
+        }
 
         next_frame().await
     }
