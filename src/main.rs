@@ -20,43 +20,6 @@ lazy_static! {
     };
 }
 
-// #[derive(Debug)]
-// struct Bounds {
-//     max_x: i32,
-//     max_z: i32,
-//     min_x: i32,
-//     min_z: i32,
-// }
-
-// /// Returns a list of all files in a directory and it's subdirectories
-// fn get_files_in_dir(path: &str, filetype: &str) -> Result<Vec<PathBuf>, GlobError> {
-//     //> get list of all files and dirs in path, using glob
-//         let mut paths = Vec::new();
-
-//         let mut potential_slash = "";
-//         if PathBuf::from(path).is_dir() && !path.ends_with('/') {
-//             potential_slash = "/";
-//         }
-
-//         let search_params = String::from(path) + potential_slash + "**/*" + filetype;
-
-//         for entry in glob(&search_params).expect("Failed to read glob pattern") {
-//             match entry {
-//                 Ok(path) => {
-//                     paths.push(path);
-//                 }
-//                 Err(e) => return Err(e),
-//             }
-//         }
-
-//     //<> filter out directories
-//         let paths = paths.into_iter().filter(|e| e.is_file());
-//     //<
-
-//     let paths: Vec<PathBuf> = paths.into_iter().collect();
-//     Ok(paths)
-// }
-
 const LOD_FUZZYNESS: f32 = 1.0;
 
 fn world_pos_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
@@ -70,36 +33,6 @@ fn screen_pos_to_world_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32
     let y_out = camera.y_offset + (y - screen_height() / 2.) / camera.zoom_multiplier;
     (x_out, y_out)
 }
-
-// //> rectangle
-// struct Rectangle {
-//     x: f32,
-//     y: f32,
-//     width: f32,
-//     height: f32,
-// }
-
-// fn value_in_range(value: f32, min: f32, max: f32) -> bool {
-//     (value >= min) && (value <= max)
-// }
-
-// /// returns true if two rectangles overlap
-// ///
-// /// Resources:
-// ///
-// /// https://stackoverflow.com/questions/306316/determine-if-two-rectangles-overlap-each-other
-// ///
-// /// https://silentmatt.com/rectangle-intersection/
-// fn rectangle_overlap(a: Rectangle, b: Rectangle) -> bool {
-//     let x_overlap =
-//         value_in_range(a.x, b.x, b.x + b.width) || value_in_range(b.x, a.x, a.x + a.width);
-
-//     let y_overlap =
-//         value_in_range(a.y, b.y, b.y + b.height) || value_in_range(b.y, a.y, a.y + a.height);
-
-//     x_overlap && y_overlap
-// }
-// //<
 
 fn sector_at_screen_pos(
     x: f32,
