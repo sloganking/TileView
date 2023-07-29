@@ -2,13 +2,16 @@ use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use macroquad::prelude::*;
 use std::collections::VecDeque;
-use std::fs;
 use std::path::Path;
 use std::{
     collections::HashMap,
     path::PathBuf,
     sync::mpsc::{self, Sender},
 };
+use std::{env, fs};
+use tempdir::TempDir;
+use tileproc::args::GenTilesArgs;
+use tileproc::tiler::{clean_dir, gen_tiles_to_dir, generate_lods};
 mod options;
 use clap::Parser;
 use lazy_static::lazy_static;
@@ -65,12 +68,13 @@ fn sector_at_screen_pos(
 
 /// stores texture in texture_cache. Does not check if it is already there.
 async fn cache_texture(
+    tile_dir: PathBuf,
     tile_data: (i32, i32, usize),
     results_tx: Sender<((i32, i32, usize), Option<Texture2D>)>,
 ) {
     let (sector_x, sector_y, lod) = tile_data;
 
-    let texture_dir = TILE_DIR
+    let texture_dir = tile_dir
         .to_path_buf()
         .join(&lod.to_string())
         .join(sector_x.to_string() + "," + &sector_y.to_string() + ".png");
@@ -238,6 +242,7 @@ struct TileViewer {
     results_rx: TileReceiver,
     rolling_decode_buffer: VecDeque<f64>,
     rolling_average_decode_time: f64,
+    tile_dir: PathBuf,
 }
 
 impl TileViewer {
@@ -267,6 +272,7 @@ impl TileViewer {
             results_rx,
             rolling_decode_buffer: VecDeque::new(),
             rolling_average_decode_time: 0.0,
+            tile_dir: tile_dir.to_path_buf(),
         }
     }
 
@@ -287,7 +293,11 @@ impl TileViewer {
                         .get(&(sector_x, sector_y, lod))
                         .is_none()
                     {
-                        let f = cache_texture((sector_x, sector_y, lod), self.results_tx.clone());
+                        let f = cache_texture(
+                            self.tile_dir.clone(),
+                            (sector_x, sector_y, lod),
+                            self.results_tx.clone(),
+                        );
 
                         // create LocalPool with one task inside
                         let pool = LocalPool::new();
@@ -556,10 +566,35 @@ fn max_lod_in_tile_dir(dir: &Path) -> usize {
 async fn main() {
     let _ = *TILE_DIR;
 
-    // let args: options::Args = clap::Parser::parse();
+    let (mut tile_viewer, max_lod) = if TILE_DIR.is_dir() {
+        (
+            TileViewer::new(&TILE_DIR).await,
+            max_lod_in_tile_dir(&TILE_DIR),
+        )
+    } else {
+        let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
+        fs::create_dir(&tmp_dir).unwrap();
 
-    // get max_lod
-    let max_lod = max_lod_in_tile_dir(&TILE_DIR);
+        let mut output_dir = tmp_dir.clone();
+        output_dir.push("0/");
+
+        let tile_args = GenTilesArgs {
+            input: TILE_DIR.clone(),
+            output: output_dir,
+            tile_dimensions: 256,
+            x_offset: None,
+            y_offset: None,
+        };
+
+        gen_tiles_to_dir(&tile_args);
+
+        generate_lods(&tmp_dir);
+
+        (
+            TileViewer::new(&tmp_dir).await,
+            max_lod_in_tile_dir(&tmp_dir),
+        )
+    };
 
     let two: f32 = 2.0;
     let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
@@ -576,8 +611,6 @@ async fn main() {
 
     let target_fps = infer_target_fps().await;
     let frame_time_limit = 1. / target_fps as f64;
-
-    let mut tile_viewer = TileViewer::new(&TILE_DIR).await;
 
     loop {
         let frame_start_time = get_time();
