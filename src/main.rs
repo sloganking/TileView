@@ -566,32 +566,14 @@ fn max_lod_in_tile_dir(dir: &Path) -> usize {
 async fn main() {
     let _ = *TILE_DIR;
 
-    // let args: options::Args = clap::Parser::parse();
-
-    // get max_lod
-    let max_lod = max_lod_in_tile_dir(&TILE_DIR);
-
-    let two: f32 = 2.0;
-    let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
-
-    let mut camera = CameraSettings {
-        x_offset: 0.,
-        y_offset: 0.,
-        zoom_multiplier: default_zoom,
-    };
-
-    let mut mouse_clicked_in_position: Option<(f32, f32)> = None;
-    let mut clicked_in_x_offset: f32 = 0.0;
-    let mut clicked_in_y_offset: f32 = 0.0;
-
-    let target_fps = infer_target_fps().await;
-    let frame_time_limit = 1. / target_fps as f64;
-
-    let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
-
-    let mut tile_viewer = if TILE_DIR.is_dir() {
-        TileViewer::new(&TILE_DIR).await
+    let (mut tile_viewer, max_lod) = if TILE_DIR.is_dir() {
+        (
+            TileViewer::new(&TILE_DIR).await,
+            max_lod_in_tile_dir(&TILE_DIR),
+        )
     } else {
+        let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
+
         fs::create_dir(&tmp_dir).unwrap();
 
         // clean_dir(&gen_tiles_args.output);
@@ -614,9 +596,27 @@ async fn main() {
 
         generate_lods(&tmp_dir);
 
-        TileViewer::new(&tmp_dir).await
-        // todo!()
+        (
+            TileViewer::new(&tmp_dir).await,
+            max_lod_in_tile_dir(&tmp_dir),
+        )
     };
+
+    let two: f32 = 2.0;
+    let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
+
+    let mut camera = CameraSettings {
+        x_offset: 0.,
+        y_offset: 0.,
+        zoom_multiplier: default_zoom,
+    };
+
+    let mut mouse_clicked_in_position: Option<(f32, f32)> = None;
+    let mut clicked_in_x_offset: f32 = 0.0;
+    let mut clicked_in_y_offset: f32 = 0.0;
+
+    let target_fps = infer_target_fps().await;
+    let frame_time_limit = 1. / target_fps as f64;
 
     loop {
         let frame_start_time = get_time();
