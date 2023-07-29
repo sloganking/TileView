@@ -478,14 +478,6 @@ impl TileViewer {
         num_rendered_tiles
     }
 
-    // fn recieve_retrieved_tiles(&mut self) {
-    //     // receive any retrieved tiles
-    //     for (details, texture_option) in self.results_rx.try_iter() {
-    //         self.texture_cache.insert(details, texture_option);
-    //         self.retriving_pools.remove(&details);
-    //     }
-    // }
-
     /// Retrieves tiles requested by queue_desired_textures() and stores them in texture_cache
     ///
     /// Always retrieves at least one tile, assuming at least one needs to be retrieved.
