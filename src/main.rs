@@ -570,15 +570,13 @@ async fn main() {
         let mut output_dir = tmp_dir.clone();
         output_dir.push("0/");
 
-        let tile_args = GenTilesArgs {
+        gen_tiles_to_dir(&GenTilesArgs {
             input: TILE_DIR.clone(),
             output: output_dir,
             tile_dimensions: 256,
             x_offset: None,
             y_offset: None,
-        };
-
-        gen_tiles_to_dir(&tile_args);
+        });
 
         generate_lods(&tmp_dir);
 
