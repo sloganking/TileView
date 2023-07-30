@@ -2,16 +2,16 @@ use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
 use macroquad::prelude::*;
 use std::collections::VecDeque;
+use std::fs;
 use std::path::Path;
 use std::{
     collections::HashMap,
     path::PathBuf,
     sync::mpsc::{self, Sender},
 };
-use std::{env, fs};
 use tempdir::TempDir;
 use tileproc::args::GenTilesArgs;
-use tileproc::tiler::{clean_dir, gen_tiles_to_dir, generate_lods};
+use tileproc::tiler::{gen_tiles_to_dir, generate_lods};
 mod options;
 use clap::Parser;
 use lazy_static::lazy_static;
