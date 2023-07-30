@@ -14,14 +14,6 @@ use tileproc::args::GenTilesArgs;
 use tileproc::tiler::{gen_tiles_to_dir, generate_lods};
 mod options;
 use clap::Parser;
-use lazy_static::lazy_static;
-
-lazy_static! {
-    static ref TILE_DIR: PathBuf = {
-        let args = options::Args::parse();
-        args.image_path
-    };
-}
 
 const LOD_FUZZYNESS: f32 = 1.0;
 
@@ -552,12 +544,13 @@ fn max_lod_in_tile_dir(dir: &Path) -> usize {
 
 #[macroquad::main("TileView")]
 async fn main() {
-    let _ = *TILE_DIR;
+    let args = options::Args::parse();
+    let tile_dir = args.image_path;
 
-    let (mut tile_viewer, max_lod) = if TILE_DIR.is_dir() {
+    let (mut tile_viewer, max_lod) = if tile_dir.is_dir() {
         (
-            TileViewer::new(&TILE_DIR).await,
-            max_lod_in_tile_dir(&TILE_DIR),
+            TileViewer::new(&tile_dir).await,
+            max_lod_in_tile_dir(&tile_dir),
         )
     } else {
         let tmp_dir = TempDir::new("tile-viewer").unwrap().path().to_path_buf();
@@ -567,7 +560,7 @@ async fn main() {
         output_dir.push("0/");
 
         gen_tiles_to_dir(&GenTilesArgs {
-            input: TILE_DIR.clone(),
+            input: tile_dir.clone(),
             output: output_dir,
             tile_dimensions: 256,
             x_offset: None,
