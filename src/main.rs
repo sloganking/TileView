@@ -48,7 +48,7 @@ fn sector_at_screen_pos(
     let screen_point_coords = screen_pos_to_world_pos(x, y, camera);
 
     // get sector x
-    let tile_world_x_size = tile_dimensions.0 as f32 * two.powf(lod as f32);
+    let tile_world_x_size = tile_dimensions.0 * two.powf(lod as f32);
     let screen_point_sector_x = if screen_point_coords.0 < 0.0 {
         (screen_point_coords.0 / tile_world_x_size) as i32 - 1
     } else {
@@ -56,7 +56,7 @@ fn sector_at_screen_pos(
     };
 
     // get sector y
-    let tile_world_y_size = tile_dimensions.1 as f32 * two.powf(lod as f32);
+    let tile_world_y_size = tile_dimensions.1 * two.powf(lod as f32);
     let screen_point_sector_y = if screen_point_coords.1 < 0.0 {
         (screen_point_coords.1 / tile_world_y_size) as i32 - 1
     } else {
@@ -76,7 +76,7 @@ async fn cache_texture(
 
     let texture_dir = tile_dir
         .to_path_buf()
-        .join(&lod.to_string())
+        .join(lod.to_string())
         .join(sector_x.to_string() + "," + &sector_y.to_string() + ".png");
 
     let texture_option =
@@ -110,7 +110,7 @@ fn lod_from_zoom(zoom_multiplier: f32, max_lod: usize) -> usize {
     let mut lod: usize = 0;
     for level in 0..=max_lod {
         if zoom_multiplier < LOD_FUZZYNESS / two.powf(level as f32) {
-            lod = level as usize;
+            lod = level;
         } else {
             break;
         }
@@ -133,7 +133,10 @@ fn current_view_cached(
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
         for sector_x in top_left_sector.0..=bottom_right_sector.0 {
             // render texture
-            if texture_cache.get(&(sector_x, sector_y, render_lod)) == None {
+            if texture_cache
+                .get(&(sector_x, sector_y, render_lod))
+                .is_none()
+            {
                 fully_rendered = false;
                 break;
             }
@@ -187,10 +190,7 @@ fn _draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, 
     for sector_y in top_left_sector.1..=bottom_right_sector.1 {
         let tile_screen_y = screen_height() / 2.
             + (-camera.y_offset * camera.zoom_multiplier)
-            + sector_y as f32
-                * tile_dimensions.1 as f32
-                * camera.zoom_multiplier
-                * two.powf(lod as f32);
+            + sector_y as f32 * tile_dimensions.1 * camera.zoom_multiplier * two.powf(lod as f32);
 
         draw_line(0., tile_screen_y, screen_width(), tile_screen_y, 3.0, RED);
     }
@@ -198,10 +198,7 @@ fn _draw_tile_lines(camera: &CameraSettings, lod: usize, tile_dimensions: (f32, 
     for sector_x in top_left_sector.0..=bottom_right_sector.0 {
         let tile_screen_x = screen_width() / 2.
             + (-camera.x_offset * camera.zoom_multiplier)
-            + sector_x as f32
-                * tile_dimensions.0 as f32
-                * camera.zoom_multiplier
-                * two.powf(lod as f32);
+            + sector_x as f32 * tile_dimensions.0 * camera.zoom_multiplier * two.powf(lod as f32);
 
         draw_line(tile_screen_x, 0., tile_screen_x, screen_height(), 3.0, RED);
     }
@@ -255,9 +252,8 @@ impl TileViewer {
                 // return dimentions of a random tile in lod 0
 
                 // get a random tile from lod 0
-                let mut paths =
-                    fs::read_dir(&(tile_dir.to_path_buf().join(&0.to_string()))).unwrap();
-                let path = paths.nth(0).unwrap().unwrap().path();
+                let mut paths = fs::read_dir(tile_dir.to_path_buf().join(0.to_string())).unwrap();
+                let path = paths.next().unwrap().unwrap().path();
                 let path_string = path.to_str().unwrap();
                 let initial_texture: Texture2D = load_texture(path_string).await.unwrap();
 
@@ -398,9 +394,9 @@ impl TileViewer {
                         // if there's a texture to be rendered
                         if let Some(texture) = texture_option {
                             let tile_world_width =
-                                self.tile_dimensions.0 as f32 * two.powf(render_lod as f32);
+                                self.tile_dimensions.0 * two.powf(render_lod as f32);
                             let tile_world_height =
-                                self.tile_dimensions.1 as f32 * two.powf(render_lod as f32);
+                                self.tile_dimensions.1 * two.powf(render_lod as f32);
 
                             let tile_screen_width = tile_world_width * camera.zoom_multiplier;
                             let tile_screen_height = tile_world_height * camera.zoom_multiplier;
@@ -519,7 +515,7 @@ impl TileViewer {
                         // store in
                         self.texture_cache.insert(details, texture_option);
 
-                        if texture_option != None {
+                        if texture_option.is_some() {
                             textures_decoded += 1;
 
                             let last_time_to_decode = get_time() - tile_decode_start_time;
@@ -587,7 +583,7 @@ async fn main() {
     };
 
     let two: f32 = 2.0;
-    let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0) as f32;
+    let default_zoom = 1.0 / two.powf(max_lod as f32 - 1.0);
 
     let mut camera = CameraSettings {
         x_offset: 0.,
@@ -641,7 +637,7 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed;
             }
 
-            let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0) as f32;
+            let min_zoom = LOD_FUZZYNESS / two.powf(max_lod as f32 + 1.0);
             let max_zoom = 20.0;
 
             // limit the zoom
@@ -697,7 +693,7 @@ async fn main() {
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
-                if mouse_clicked_in_position == None {
+                if mouse_clicked_in_position.is_none() {
                     mouse_clicked_in_position = Some(mouse_position());
                     clicked_in_x_offset = -camera.x_offset;
                     clicked_in_y_offset = -camera.y_offset;
