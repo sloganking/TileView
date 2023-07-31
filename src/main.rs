@@ -686,23 +686,26 @@ async fn main() {
 
             // mouse drag screen
             if is_mouse_button_down(MouseButton::Left) {
-                if mouse_clicked_in_position.is_none() {
-                    mouse_clicked_in_position = Some(mouse_position());
-                    clicked_in_x_offset = -camera.x_offset;
-                    clicked_in_y_offset = -camera.y_offset;
-                } else {
-                    let cur_mouse_pos = mouse_position();
+                match mouse_clicked_in_position {
+                    None => {
+                        mouse_clicked_in_position = Some(mouse_position());
+                        clicked_in_x_offset = -camera.x_offset;
+                        clicked_in_y_offset = -camera.y_offset;
+                    }
+                    Some(x) => {
+                        let cur_mouse_pos = mouse_position();
 
-                    // calc new x_offset
-                    let mouse_x_diff = cur_mouse_pos.0 - mouse_clicked_in_position.unwrap().0;
-                    camera.x_offset =
-                        -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
+                        // calc new x_offset
+                        let mouse_x_diff = cur_mouse_pos.0 - x.0;
+                        camera.x_offset =
+                            -(clicked_in_x_offset + mouse_x_diff / camera.zoom_multiplier);
 
-                    // calc new y_offset
-                    let mouse_y_diff = cur_mouse_pos.1 - mouse_clicked_in_position.unwrap().1;
-                    camera.y_offset =
-                        -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
-                }
+                        // calc new y_offset
+                        let mouse_y_diff = cur_mouse_pos.1 - x.1;
+                        camera.y_offset =
+                            -(clicked_in_y_offset + mouse_y_diff / camera.zoom_multiplier);
+                    }
+                };
             } else {
                 mouse_clicked_in_position = None;
             }
