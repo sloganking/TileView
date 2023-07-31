@@ -241,9 +241,9 @@ impl TileViewer {
             texture_cache: HashMap::new(),
             retriving_pools: HashMap::new(),
             tile_dimensions: {
-                // return dimentions of a random tile in lod 0
+                // return dimentions of a tile in lod 0
 
-                // get a random tile from lod 0
+                // get a tile from lod 0
                 let mut paths = fs::read_dir(tile_dir.to_path_buf().join(0.to_string())).unwrap();
                 let path = paths.next().unwrap().unwrap().path();
                 let path_string = path.to_str().unwrap();
