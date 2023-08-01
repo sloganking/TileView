@@ -1,5 +1,6 @@
 use futures::executor::LocalPool;
 use futures::task::LocalSpawnExt;
+use image::GenericImageView;
 use macroquad::prelude::*;
 use std::collections::VecDeque;
 use std::fs;
@@ -16,6 +17,30 @@ mod options;
 use clap::Parser;
 
 const LOD_FUZZYNESS: f32 = 1.0;
+
+async fn load_texture_from_file(path: &str) -> Result<Texture2D, FileError> {
+    // load image using image crate
+    let image = image::open(path).map_err(|_| FileError {
+        kind: miniquad::fs::Error::DownloadFailed,
+        path: path.to_owned(),
+    })?;
+
+    // setup macroquad image
+    let mut macro_image = Image::empty();
+    macro_image.width = image.width().try_into().unwrap();
+    macro_image.height = image.height().try_into().unwrap();
+    macro_image.bytes = vec![0; (image.width() * image.height() * 4) as usize];
+
+    // transfer image pixels to macroquad image
+    for x in 0..image.width() {
+        for y in 0..image.height() {
+            let pix = image.get_pixel(x, y);
+            macro_image.set_pixel(x, y, pix.0.into())
+        }
+    }
+
+    Ok(Texture2D::from_image(&macro_image))
+}
 
 fn world_pos_to_screen_pos(x: f32, y: f32, camera: &CameraSettings) -> (f32, f32) {
     let out_x = screen_width() / 2. + ((x - camera.x_offset) * camera.zoom_multiplier);
@@ -69,10 +94,10 @@ async fn cache_texture(
     let texture_dir = tile_dir
         .to_path_buf()
         .join(lod.to_string())
-        .join(sector_x.to_string() + "," + &sector_y.to_string() + ".png");
+        .join(sector_x.to_string() + "," + &sector_y.to_string() + ".qoi");
 
     let texture_option =
-        match load_texture(&texture_dir.into_os_string().into_string().unwrap()).await {
+        match load_texture_from_file(&texture_dir.into_os_string().into_string().unwrap()).await {
             Ok(texture) => Some(texture),
             _ => None,
         };
@@ -247,7 +272,7 @@ impl TileViewer {
                 let mut paths = fs::read_dir(tile_dir.to_path_buf().join(0.to_string())).unwrap();
                 let path = paths.next().unwrap().unwrap().path();
                 let path_string = path.to_str().unwrap();
-                let initial_texture: Texture2D = load_texture(path_string).await.unwrap();
+                let initial_texture: Texture2D = load_texture_from_file(path_string).await.unwrap();
 
                 // get the dimensions of the tile before it is freed
                 let tile_dimensions = (initial_texture.width(), initial_texture.height());
