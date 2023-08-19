@@ -634,7 +634,7 @@ async fn main() {
             let max_zoom = 20.0;
 
             // limit the zoom
-            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+            camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, max_zoom);
 
             // zoom via scroll wheel
             let (_, mouse_scroll) = mouse_wheel();
@@ -648,7 +648,7 @@ async fn main() {
                 camera.zoom_multiplier += zoom_speed * 10.;
 
                 // limit the zoom
-                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, max_zoom);
 
                 // center camera on where mouse was in world
                 camera.x_offset = mouse_world_pos.0;
@@ -670,7 +670,7 @@ async fn main() {
                 camera.zoom_multiplier -= zoom_speed * 10.;
 
                 // limit the zoom
-                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, 20.);
+                camera.zoom_multiplier = camera.zoom_multiplier.clamp(min_zoom, max_zoom);
 
                 // center camera on where mouse was in world
                 camera.x_offset = mouse_world_pos.0;
