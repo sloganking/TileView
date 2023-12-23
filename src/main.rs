@@ -726,7 +726,7 @@ async fn main() {
             num_rendered_tiles
         };
         // draw text in top left corner
-        {
+        if args.stats {
             let lod = lod_from_zoom(camera.zoom_multiplier, max_lod);
             draw_text(
                 &("fps: ".to_owned() + &get_fps().to_string()),
