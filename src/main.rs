@@ -717,7 +717,7 @@ async fn main() {
             // tile_viewer.recieve_retrieved_tiles();
             tile_viewer.clean_tile_texture_cache(&camera);
             tile_viewer.queue_desired_textures(&camera);
-            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera, false);
+            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera, args.tiles);
             tile_viewer.retrieve_tiles_till_out_of_work_or_time(
                 &camera,
                 frame_start_time,
