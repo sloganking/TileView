@@ -1,6 +1,6 @@
 # TileView
  
-`TileView` is a program for viewing super resolution images. It works by only rendering parts of an image that are on your screen, at a resolution that won't overwhelm your computer. To slice your own image into tiles so `TileView` can view it, see [tile-processor](https://github.com/sloganking/tile-processor).
+`TileView` is a program for viewing super resolution images. It works by only rendering parts of an image that are on your screen, at a resolution that won't overwhelm your computer. You can run `TileView` on a directory containing a tileset, or on a standard image file. If you run `TileView` on an image file, it will use [tile-processor](https://github.com/sloganking/tile-processor) to convert the image to tiles in a tmp directory before viewing it.
 
 An example of how a large image can be rendered at various levels of details (LODs)
 ![](https://raw.githubusercontent.com/banesullivan/localtileserver/main/imgs/tile-diagram.gif)
