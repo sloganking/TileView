@@ -364,7 +364,12 @@ impl TileViewer {
     ///
     /// Renders all image tiles in tile cache that are on screen. Including tiles with an LOD different from the current one.
     /// Larger LOD tiles are rendered first, so as to fill in holes left by smaller LOD tiles that have not been cached yet.
-    fn render_screen_tiles(&self, camera: &CameraSettings, tile_boxes: bool) -> u32 {
+    fn render_screen_tiles(
+        &self,
+        camera: &CameraSettings,
+        tile_boxes: bool,
+        show_culling: bool,
+    ) -> u32 {
         let mut num_rendered_tiles: u32 = 0;
         let two: f32 = 2.0;
 
@@ -377,12 +382,20 @@ impl TileViewer {
             for ((tile_x, tile_y, tile_lod), texture_option) in &self.texture_cache {
                 // if correct LOD
                 if *tile_lod == render_lod {
+                    let tile_on_screen = if !show_culling {
+                        *tile_x >= top_left_sector.0
+                            && *tile_y >= top_left_sector.1
+                            && *tile_x <= bottom_right_sector.0
+                            && *tile_y <= bottom_right_sector.1
+                    } else {
+                        *tile_x >= top_left_sector.0 + 1
+                            && *tile_y >= top_left_sector.1 + 1
+                            && *tile_x <= bottom_right_sector.0 - 1
+                            && *tile_y <= bottom_right_sector.1 - 1
+                    };
+
                     // if tile on screen
-                    if *tile_x >= top_left_sector.0
-                        && *tile_y >= top_left_sector.1
-                        && *tile_x <= bottom_right_sector.0
-                        && *tile_y <= bottom_right_sector.1
-                    {
+                    if tile_on_screen {
                         // if there's a texture to be rendered
                         if let Some(texture) = texture_option {
                             let tile_world_width =
@@ -717,7 +730,8 @@ async fn main() {
             // tile_viewer.recieve_retrieved_tiles();
             tile_viewer.clean_tile_texture_cache(&camera);
             tile_viewer.queue_desired_textures(&camera);
-            let num_rendered_tiles = tile_viewer.render_screen_tiles(&camera, args.tiles);
+            let num_rendered_tiles =
+                tile_viewer.render_screen_tiles(&camera, args.tiles, args.show_culling);
             tile_viewer.retrieve_tiles_till_out_of_work_or_time(
                 &camera,
                 frame_start_time,
