@@ -11,6 +11,10 @@ pub struct Args {
     #[clap(long)]
     pub tiles: bool,
 
+    /// Whether to show the culling box, beyond which tiles are not rendered.
+    #[clap(long)]
+    pub show_culling: bool,
+
     /// The path to the image or tiles to render
     pub image_path: PathBuf,
 }
