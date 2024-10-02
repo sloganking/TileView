@@ -390,12 +390,12 @@ impl TileViewer {
                     } else {
                         // Define a helper closure for culling logic
                         let is_within = |coord: i32, start: i32, end: i32| {
-                            if start + 1 > end - 1 {
+                            if end - start > 1 {
+                                // Multiple tiles on this axis; apply culling
+                                coord > start && coord < end
+                            } else {
                                 // Only one or two tiles on this axis; allow both
                                 coord == start || coord == end
-                            } else {
-                                // Multiple tiles; apply culling
-                                coord >= start + 1 && coord <= end - 1
                             }
                         };
 
