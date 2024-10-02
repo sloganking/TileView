@@ -388,10 +388,20 @@ impl TileViewer {
                             && *tile_x <= bottom_right_sector.0
                             && *tile_y <= bottom_right_sector.1
                     } else {
-                        *tile_x >= top_left_sector.0 + 1
-                            && *tile_y >= top_left_sector.1 + 1
-                            && *tile_x <= bottom_right_sector.0 - 1
-                            && *tile_y <= bottom_right_sector.1 - 1
+                        // Define a helper closure for culling logic
+                        let is_within = |coord: i32, start: i32, end: i32| {
+                            if start + 1 > end - 1 {
+                                // Only one or two tiles on this axis; allow both
+                                coord == start || coord == end
+                            } else {
+                                // Multiple tiles; apply culling
+                                coord >= start + 1 && coord <= end - 1
+                            }
+                        };
+
+                        // Check both axes
+                        is_within(*tile_x, top_left_sector.0, bottom_right_sector.0)
+                            && is_within(*tile_y, top_left_sector.1, bottom_right_sector.1)
                     };
 
                     // if tile on screen
