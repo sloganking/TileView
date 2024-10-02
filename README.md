@@ -6,6 +6,8 @@
 
 https://github.com/user-attachments/assets/08aa6c8f-e092-490a-9338-9302d6d5a9a0
 
+Image source: [Cosmic Cliffs (14,575 x 8,441)](https://webbtelescope.org/contents/media/images/2022/031/01G77PKB8NKR7S8Z6HBXMYATGJ?page=1&keyword=pillar)
+
 
 An example of how a large image can be rendered at various levels of details (LODs)
 ![](https://raw.githubusercontent.com/banesullivan/localtileserver/main/imgs/tile-diagram.gif)
